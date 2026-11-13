@@ -4,7 +4,7 @@
 //  ___ _  ___| | __   ___ ____   ___  ___          //
 // / __| |/ __| |/ /  / __| '_ \ / _ \/ __|         //
 // \__ \ | (__|   <   \__ \ | | |  __/\__ \         //
-// |___/_|\___|_|\_\  \___/_| |_|\___||___/  v2.0.0 //
+// |___/_|\___|_|\_\  \___/_| |_|\___||___/  v2.1.0 //
 //////////////////////////////////////////////////////
 //
 // Made by @lucaslealdev -- original project, hardware mod and the whole v1.x
@@ -14,18 +14,17 @@
 // If the cartridge does not pass the CIC check, the mod disables the lockout
 // chip and resets the console automatically.
 //
-// v2.0.0 is a maintenance release of that work (same GPL-3.0 license):
+// v2.x is a maintenance release of that work (same GPL-3.0 license):
 //  - reset + CIC boot sequence is byte-identical to v1.5.0 (proven to boot)
-//  - optional single RGB LED (D7 = red, D6 = blue, D3 = green)
+//  - three plain LED outputs: D7 = red, D6 = blue, D3 = green
 //  - controller pins are configured correctly (A0/A1/A2)
 //  - bus reads have timeouts; combos must be held before firing
 //  - EEPROM is validated and stored at a separate address (v1.5.0 combos and
 //    the v1.5.0 image keep working when you flash back and forth)
 //  - default combos no longer collide with SD2SNES/FXPak shortcuts
 //
-// >>> CONFIGURACAO: nao edite este arquivo para trocar de montagem.
-//     Abra a aba "config.h" e descomente as linhas da sua instalacao
-//     (LED RGB, sem controle, depuracao serial). <<<
+// >>> CONFIGURACAO: nao edite este arquivo.
+//     Abra a aba "config.h" e descomente a linha da sua instalacao. <<<
 
 #include <Arduino.h>
 
@@ -173,9 +172,7 @@ static void handleInGame() {
     if (millis() - heldSince < COMBO_HOLD_MS) return;
 
     fired = true;
-#if HAS_RGB_LED
     blueOn();
-#endif
     if (kind == 1) {
         if (debug) Serial.println(F("Soft reset"));
         triggerReset();
@@ -183,9 +180,7 @@ static void handleInGame() {
         if (debug) Serial.println(F("Long reset"));
         triggerLongReset();
     }
-#if HAS_RGB_LED
     blueOff();
-#endif
 }
 #endif  // HAS_CONTROLLER
 
@@ -200,26 +195,13 @@ void setup() {
     if (debug) Serial.begin(9600);
 #if SICKNES_DEBUG
     // Banner with the compiled options (only when debug is enabled in config.h).
-    Serial.println(F("sick snes v2.0.0 - config:"));
+    Serial.println(F("sick snes v2.1.0 - config:"));
   #if HAS_CONTROLLER
-    Serial.println(F("  controle: A0/A1/A2 ligados"));
+    Serial.println(F("  pads: ligados (A0/A1/A2)"));
   #else
-    Serial.println(F("  controle: DESLIGADO (sem reset em jogo)"));
+    Serial.println(F("  pads: DESLIGADOS (sem reset em jogo, sem combos)"));
   #endif
-  #if HAS_RGB_LED
-    #if RGB_COMMON_ANODE
-    Serial.println(F("  LED: RGB unico, anodo comum"));
-    #else
-    Serial.println(F("  LED: RGB unico, catodo comum"));
-    #endif
-    #if defined(RGB_GREEN_ON_D6)
-    Serial.println(F("  canais: verde=D6, azul=D3"));
-    #else
-    Serial.println(F("  canais: vermelho=D7, azul=D6, verde=D3"));
-    #endif
-  #else
-    Serial.println(F("  LED: dois LEDs (D6/D7 + D9/D10)"));
-  #endif
+    Serial.println(F("  LEDs: D7=vermelho D6=azul D3=verde (positivos)"));
 #endif
 
     // 1. Lockout chip enabled by default.
@@ -230,6 +212,7 @@ void setup() {
 
     // 3. Onboard LED and status LED.
     pinMode(PIN_DEBUG_LED, OUTPUT);
+    ledInit();      // legacy v1.x cathodes (D9/D10) held LOW
     blueOff();
     updateLED();
 
@@ -249,17 +232,13 @@ void setup() {
 
     handleCICUnlockIfNeeded();
 
-#if HAS_RGB_LED
     // "Firmware reached the end of setup" cue: one short green pulse on D3.
     // D3 is not used by v1.5.0, so this pin is a free diagnostic channel.
-    if (isCicOn()) greenPulse(80);
-#endif
+    if (isCicOn()) greenPulse(BOOT_PULSE_MS);
 
     if (loadCombos()) {
-#if HAS_RGB_LED
         // Blank/old EEPROM: the defaults were just written.
         blueBlink(2, 100);
-#endif
     }
 }
 

@@ -3,66 +3,50 @@
 
 #include <Arduino.h>
 
-// User-editable options (LED type, controller wires, debug). The defaults
-// below only apply when config.h leaves them commented out.
+// User-editable options (pads on/off, debug). The defaults below only apply
+// when config.h leaves them commented out.
 #include "config.h"
 
 // ---------------------------------------------------------------------------
 // Feature flags
 // ---------------------------------------------------------------------------
-// Set to 0 when the controller port (A0/A1/A2) is NOT wired.
-// The automatic CIC bypass still works; in-game reset and combo
-// configuration are compiled out.
-#ifndef HAS_CONTROLLER
+// PADS_OFF / PADS_ON in config.h choose whether the controller port
+// (A0/A1/A2) is read. The automatic CIC bypass always works.
+#if defined(PADS_ON) && defined(PADS_OFF)
+#error "config.h: descomente PADS_ON ou PADS_OFF, nao os dois."
+#endif
+#if defined(PADS_OFF)
+#undef HAS_CONTROLLER
+#define HAS_CONTROLLER 0
+#elif defined(PADS_ON)
+#undef HAS_CONTROLLER
 #define HAS_CONTROLLER 1
+#elif !defined(HAS_CONTROLLER)
+#define HAS_CONTROLLER 1
+#endif
+
+// Serial debug output (config.h: SICKNES_DEBUG 1). Off by default.
+#ifndef SICKNES_DEBUG
+#define SICKNES_DEBUG 0
 #endif
 
 // ---------------------------------------------------------------------------
 // Pins (Arduino Nano / Uno, ATmega328P)
 // ---------------------------------------------------------------------------
+// The three LED pins are plain positive outputs: anode to the pin through a
+// resistor, cathode to GND. One LED per pin, or one common-cathode RGB LED.
 #define PIN_RESET        4    // SNES /RESET   (active LOW, open-drain)
 #define PIN_CIC_DATA     5    // CIC pin 1     (data I/O, bidirectional)
-#define PIN_LED_GREEN    6    // green LED anode
-#define PIN_LED_RED      7    // red LED anode
+#define PIN_LED_BLUE     6    // blue LED      (feedback)
+#define PIN_LED_RED      7    // red LED       (lockout state)
 #define PIN_CIC_CONF     8    // CIC pin 4     (CONF, must be lifted)
-#define PIN_LED_GND_G    9    // green LED cathode / return
-#define PIN_LED_GND_R   10    // red LED cathode / return
+#define PIN_LED_GREEN    3    // green LED     (lockout off + boot pulse)
+#define PIN_LED_CATHODE_G 9   // legacy v1.x wiring: green LED cathode return
+#define PIN_LED_CATHODE_R 10  // legacy v1.x wiring: red LED cathode return
 #define PIN_LATCH       A0    // controller port latch  (PC0)
 #define PIN_CLOCK       A1    // controller port clock  (PC1)
 #define PIN_DATA        A2    // controller port data   (PC2)
 #define PIN_DEBUG_LED   13    // onboard LED
-
-// ---------------------------------------------------------------------------
-// LED options
-// ---------------------------------------------------------------------------
-// 0 = two discrete LEDs: anode on D6/D7, switched cathode on D9/D10
-//     (the wiring described in the README, keeps the stock LED mod).
-// 1 = one 4-pin RGB LED, common cathode (or common anode) tied to a rail.
-//     Default mapping: red -> D7, blue -> D6, green -> D3.
-//     D9/D10 are unused in this mode.
-#ifndef HAS_RGB_LED
-#define HAS_RGB_LED 0
-#endif
-
-// 0 = common cathode (common leg to GND), 1 = common anode (common leg to +5V).
-#ifndef RGB_COMMON_ANODE
-#define RGB_COMMON_ANODE 0
-#endif
-
-// RGB channel pins. D7 (red) and D6 (second status colour) are the same pins
-// the v1.x firmware uses, so an old v1.5.0 image can be flashed back on top
-// without rewiring. v1.5.0 toggles the anode, so it still blinks with the
-// common leg on GND.
-// Define RGB_GREEN_ON_D6 to put green on D6 and blue on D3 instead.
-#if HAS_RGB_LED && defined(RGB_GREEN_ON_D6)
-#undef PIN_LED_GREEN
-#define PIN_LED_GREEN    6
-#define PIN_LED_BLUE     3
-#elif HAS_RGB_LED
-#undef PIN_LED_GREEN
-#define PIN_LED_GREEN    3
-#define PIN_LED_BLUE     6
-#endif
 
 // ---------------------------------------------------------------------------
 // Electrical conventions
@@ -86,17 +70,6 @@
 // cathode there), so the sample happens 1700 ms after the reset line returns.
 #define CIC_CHECK_DELAY_MS   1700
 #define BOOT_RESET_MS         500  // reset held while the Arduino boots
-
-// ---------------------------------------------------------------------------
-// Sanity checks for config.h
-// ---------------------------------------------------------------------------
-// Catches the classic mistake of enabling an RGB-only option while the 2-LED
-// build is still selected, instead of silently compiling the wrong thing.
-#if defined(RGB_GREEN_ON_D6) && !HAS_RGB_LED
-#error "config.h: RGB_GREEN_ON_D6 so vale junto com HAS_RGB_LED 1."
-#endif
-#if RGB_COMMON_ANODE && !HAS_RGB_LED
-#error "config.h: RGB_COMMON_ANODE so vale junto com HAS_RGB_LED 1."
-#endif
+#define BOOT_PULSE_MS          80  // green "setup() finished" pulse
 
 #endif

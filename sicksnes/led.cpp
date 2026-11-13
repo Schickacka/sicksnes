@@ -6,25 +6,19 @@
 // Which status colour is currently selected (red = CIC on, green = CIC off).
 static bool redActive = false;
 
-#if HAS_RGB_LED
-// Guard the documented mapping so a future edit cannot silently break the
-// "flash v1.5.0 back without rewiring" property (D7 = red, D6 = status 2).
-#if defined(RGB_GREEN_ON_D6)
-static_assert(PIN_LED_GREEN == 6 && PIN_LED_BLUE == 3,
-              "RGB_GREEN_ON_D6 expects green on D6 and blue on D3");
-#else
-static_assert(PIN_LED_RED == 7 && PIN_LED_BLUE == 6 && PIN_LED_GREEN == 3,
-              "Default RGB mapping must be D7=red, D6=blue, D3=green");
-#endif
+// The v1.x wiring switched each LED on its cathode (D9/D10) and fed the anode
+// from D6/D7. v2.1.0 drives the anodes only, so holding the cathode returns LOW
+// keeps those installs working while a cathode-to-GND LED behaves the same.
+void ledInit() {
+    digitalWrite(PIN_LED_CATHODE_G, LOW);
+    pinMode(PIN_LED_CATHODE_G, OUTPUT);
+    digitalWrite(PIN_LED_CATHODE_R, LOW);
+    pinMode(PIN_LED_CATHODE_R, OUTPUT);
+}
 
-// One pin per colour, no switched cathode: HIGH = on (common cathode),
-// LOW = on (common anode).
+// One pin per colour, all positive: HIGH = on.
 static inline void ledWrite(uint8_t pin, bool on) {
-#if RGB_COMMON_ANODE
-    digitalWrite(pin, on ? LOW : HIGH);
-#else
     digitalWrite(pin, on ? HIGH : LOW);
-#endif
     pinMode(pin, OUTPUT);
 }
 
@@ -56,60 +50,7 @@ void blueOff() {
     ledWrite(PIN_LED_BLUE, false);
 }
 
-#else  // two discrete LEDs: anode on D6/D7, switched cathode on D9/D10
-
-void greenLedOn() {
-    digitalWrite(PIN_LED_RED, LOW);
-    pinMode(PIN_LED_RED, INPUT);
-    pinMode(PIN_LED_GND_R, INPUT);
-
-    digitalWrite(PIN_LED_GREEN, HIGH);
-    pinMode(PIN_LED_GREEN, OUTPUT);
-    digitalWrite(PIN_LED_GND_G, LOW);
-    pinMode(PIN_LED_GND_G, OUTPUT);
-
-    redActive = false;
-}
-
-void redLedOn() {
-    digitalWrite(PIN_LED_GREEN, LOW);
-    pinMode(PIN_LED_GREEN, INPUT);
-    pinMode(PIN_LED_GND_G, INPUT);
-
-    digitalWrite(PIN_LED_RED, HIGH);
-    pinMode(PIN_LED_RED, OUTPUT);
-    digitalWrite(PIN_LED_GND_R, LOW);
-    pinMode(PIN_LED_GND_R, OUTPUT);
-
-    redActive = true;
-}
-
-void activeLedOn() {
-    if (redActive) {
-        digitalWrite(PIN_LED_GND_R, LOW);
-        pinMode(PIN_LED_GND_R, OUTPUT);
-    } else {
-        digitalWrite(PIN_LED_GND_G, LOW);
-        pinMode(PIN_LED_GND_G, OUTPUT);
-    }
-}
-
-void activeLedOff() {
-    if (redActive) {
-        pinMode(PIN_LED_GND_R, INPUT);
-    } else {
-        pinMode(PIN_LED_GND_G, INPUT);
-    }
-}
-
-// No dedicated blue channel: reuse the active status LED for feedback.
-void blueOn()  { activeLedOn(); }
-void blueOff() { activeLedOff(); }
-
-#endif
-
-// One short green flash, then back to the CIC status colour. Used as a
-// "setup() finished" marker on the RGB build (D3 is free in v1.5.0).
+// One short green flash, then back to the CIC status colour.
 void greenPulse(uint16_t ms) {
     bool wasRed = redActive;
     greenLedOn();

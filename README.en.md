@@ -1,4 +1,4 @@
-# 🎮 sick snes — v2.0.0
+# 🎮 sick snes — v2.1.0
 
 ![sick snes logo](images/logo.jpg)
 
@@ -25,9 +25,9 @@ Everything that actually makes this mod work — lifting CIC pin 4, tapping the
 reset line, reading the controller bus, the LED scheme, the in-game reset idea —
 was designed, built and validated by him (with a nod to
 [JeffWDH/NES-In-Game-Reset](https://github.com/JeffWDH/NES-In-Game-Reset) for
-the reset idea). v2.0.0 is a maintenance release of that work: it keeps the
-proven v1.5.0 behaviour on the boot path and adds an optional single RGB LED
-plus a handful of robustness fixes.
+the reset idea). v2.x is a maintenance release of that work: it keeps the
+proven v1.5.0 behaviour on the boot path, fixes a handful of robustness details
+and puts the whole configuration in a single file.
 
 License: **GPL-3.0**, inherited from upstream. See [LICENSE](LICENSE).
 
@@ -35,14 +35,14 @@ License: **GPL-3.0**, inherited from upstream. See [LICENSE](LICENSE).
 
 ## 📚 Table of contents
 
-1. [What's new in v2.0.0](#-whats-new-in-v200)
+1. [What's new in v2.1.0](#-whats-new-in-v210)
 2. [Which firmware should I flash?](#-which-firmware-should-i-flash)
 3. [Wiring](#-wiring)
 4. [The LEDs](#-the-leds)
 5. [Controls](#️-controls)
 6. [Configuration mode](#️-configuration-mode)
 7. [SD2SNES / FXPak compatibility](#-sd2snes--fxpak-compatibility)
-8. [Installing without the controller wires](#-installing-without-the-controller-wires)
+8. [Installing without the pads](#-installing-without-the-pads)
 9. [Flashing](#-flashing)
 10. [Configuring and building](#️-configuring-and-building)
 11. [Compatibility](#-compatibility)
@@ -52,62 +52,51 @@ License: **GPL-3.0**, inherited from upstream. See [LICENSE](LICENSE).
 
 ---
 
-## ✨ What's new in v2.0.0
+## ✨ What's new in v2.1.0
 
 | | |
 |---|---|
-| 🌈 **Single RGB LED** | One 4-pin RGB LED replaces the two LEDs: red = lockout on, green = lockout off, blue = feedback. `D6` and `D7` stay where v1.x put them, so **v1.5.0 can be flashed back without rewiring**. |
+| 💡 **Three LEDs, three pins** | `D7` = red (lockout on), `D6` = blue (feedback), `D3` = green (lockout off + boot pulse). They are plain **positive** outputs: anode to the pin, cathode to GND. One LED per pin or one common-cathode RGB LED. |
 | 🧭 **Boot path is v1.5.0 verbatim** | `setup()` order, reset helper, CIC pull-up and sample time are identical to the image known to boot. `reset.cpp` is a line-by-line port. |
-| 🎮 **Controller pins actually fixed** | v1.x did `#define latch 19 / clock 20 / Sdata 21`, which configures **A5/A6/A7** on a Nano, while the code read **A0/A1/A2**. v2.0.0 uses the real `A0/A1/A2`. |
+| 🎛️ **`config.h`, PsNee style** | One file, commented lines: *uncomment this to turn the pads off*, *uncomment this to turn them on*. No flags, no code edits. |
+| 🎮 **Controller pins actually fixed** | v1.x did `#define latch 19 / clock 20 / Sdata 21`, which configures **A5/A6/A7** on a Nano, while the code read **A0/A1/A2**. v2.x uses the real `A0/A1/A2`. |
 | ⏱️ **Bus timeouts** | A missing controller no longer hangs the loop; a failed read releases all buttons. |
 | ⏳ **Combo hold time** | A combo must be held for ~400 ms, so one glitched frame never resets the console. |
 | 💾 **Validated EEPROM at a new address** | Magic + version + checksum + range checks, stored at **address 64** so v1.5.0's combos (address 0) survive a round trip. |
 | 🕹️ **New default combos** | `L+R+X+Y` / `L+R+A+B` — they do not collide with any SD2SNES/FXPak shortcut. |
-| 💡 **Green "alive" pulse** | On the RGB build, one 80 ms green pulse on `D3` at the end of `setup()` — a free diagnostic channel that v1.5.0 never touches. |
-| 🎛️ **One config file** | `sicksnes/config.h`: uncomment the line for your wiring (RGB LED, no controller, debug) and compile. No code edits, no flags to remember. |
 | 📖 **Docs** | This README, wiring tables, boot legend and the Portuguese version ([README.md](README.md)). |
 
 ---
 
 ## 🧭 Which firmware should I flash?
 
-Two independent things decide the firmware: **how the LEDs are wired** and
-**whether `A0`/`A1`/`A2` are soldered**.
+There are **two images**, and the only difference is whether the pads
+(`A0`/`A1`/`A2`) are soldered:
 
-| Firmware | LED | Controller | Flash this when |
-|---|---|---|---|
-| `firmware/sicksnes-v2.0.0-rgb-controller.hex` | RGB | yes | You added a single RGB LED **and** wired `A0/A1/A2`. Most complete build. |
-| `firmware/sicksnes-v2.0.0-rgb-nocontroller.hex` | RGB | no | You added a single RGB LED but did **not** wire `A0/A1/A2`. CIC bypass + LEDs only. |
-| `firmware/sicksnes-v2.0.0-2led-controller.hex` | 2 LEDs | yes | Stock v1.x LED wiring + controller wires. The classic setup. |
-| `firmware/sicksnes-v2.0.0-2led-nocontroller.hex` | 2 LEDs | no | Stock v1.x LED wiring, no controller wires. Smallest image. |
-
-### Why do these four options exist?
-
-- **"With controller" vs "without controller".** The CIC bypass only needs
-  `D4`, `D5` and `D8`. Plenty of installs stop there and never solder the three
-  controller taps, because the mod works fine without them — you just lose
-  in-game reset and combo configuration. v1.x was *not* safe in that case: the
-  pins floated with no timeout, so the firmware could hang or read phantom
-  buttons. v2.0.0 fixes the firmware **and** ships a build with the controller
-  code compiled out (`HAS_CONTROLLER=0`): no polling, no interrupts, no chance
-  of phantom input, and ~1.4 KB less flash.
-- **"RGB" vs "2 LEDs".** The 2-LED build is the original scheme (anode on
-  `D6`/`D7`, switched cathode on `D9`/`D10`). The RGB build drives one pin per
-  colour and uses `D6`/`D7` for the same two colours v1.x used, plus `D3` for
-  green. That specific mapping is what lets you **flash v1.5.0 back on top
-  without rewiring**: v1.5.0 shows solid red/blue on that LED and simply ignores
-  `D3`.
-
-You can always flash the wrong pairing — the pins are inputs, nothing is
-damaged — you just get a feature you cannot use, or feedback on a channel you
-did not wire.
-
-| Build | Flash used | File |
+| Firmware | Pads | Flash this when |
 |---|---|---|
-| RGB + controller | 4408 B | 12.417 B |
-| RGB, no controller | 3054 B | 8.604 B |
-| 2 LEDs + controller | 4400 B | 12.388 B |
-| 2 LEDs, no controller | 3014 B | 8.498 B |
+| `firmware/sicksnes-v2.1.0.hex` | **yes** | You wired `A0`/`A1`/`A2`. You get in-game reset and combo configuration. Most complete build. |
+| `firmware/sicksnes-v2.1.0-nopads.hex` | no | CIC bypass only, no pad wires. Smallest image, no controller polling at all. |
+
+The LEDs are **not** part of this choice: `D3`, `D6` and `D7` are positive
+outputs and the same firmware drives a single RGB LED or separate LEDs. If you
+leave one of them unconnected, you simply do not see that colour.
+
+### Why two?
+
+The CIC bypass only needs `D4`, `D5` and `D8`. Plenty of installs stop there and
+never solder the three pad wires, because the mod works fine without them — you
+just lose in-game reset and combo configuration.
+
+v1.x was *not* safe in that case: the pins floated with no timeout, so the
+firmware could hang or read phantom buttons. v2.x fixes the firmware **and**
+ships an image with the pad code compiled out: no polling, no phantom input and
+~1.3 KB less flash. It is exactly what `PADS_OFF` in `config.h` does.
+
+| Build | Flash used | `.hex` file |
+|---|---|---|
+| Pads on | 4440 B | ~12.5 KB |
+| Pads off | 3086 B | ~8.7 KB |
 
 ---
 
@@ -122,18 +111,18 @@ did not wire.
 | `D4` | `/RESET` (active LOW) | Reset button / reset test point |
 | `D5` | CIC data | **CIC pin 1** |
 | `D8` | CIC `CONF` | **CIC pin 4** (must be lifted) |
-| `D6` | LED, 2nd colour | Blue LED (RGB) / green LED (2-LED) anode |
-| `D7` | LED, red | Red LED anode |
-| `D3` | LED, green | Green LED anode (**RGB build only**) |
-| `D9` | cathode return | Green LED cathode (**2-LED build only**) |
-| `D10` | cathode return | Red LED cathode (**2-LED build only**) |
+| `D6` | LED blue (positive) | Blue LED anode, resistor, cathode to GND |
+| `D7` | LED red (positive) | Red LED anode, resistor, cathode to GND |
+| `D3` | LED green (positive) | Green LED anode, resistor, cathode to GND |
+| `D9` | cathode (old wiring) | Only for the v1.x wiring; the firmware holds it LOW |
+| `D10` | cathode (old wiring) | Only for the v1.x wiring; the firmware holds it LOW |
 | `A0` | controller **latch** | Controller port pin 10 |
 | `A1` | controller **clock** | Controller port pin 8 |
 | `A2` | controller **data** | Controller port pin 6 |
 
 > **CIC pin 4 must be lifted** (disconnected from the board). It is `CONF`, not
 > ground: `+5 V` = lockout enabled, `GND` = lockout disabled (the chip has an
-> internal pull-down). v2.0.0 drives it, so the mod can toggle it at runtime —
+> internal pull-down). v2.x drives it, so the mod can toggle it at runtime —
 > unlike the classic "cut and ground" mod.
 
 ### ↻ Reset button (viewed from the PCB bottom)
@@ -183,55 +172,46 @@ flashcart.
 
 ## 💡 The LEDs
 
-### Two-LED build (v1.x wiring)
+There is nothing to configure: **`D3`, `D6` and `D7` are plain positive LED
+outputs**. Put the anode on the pin, a resistor in series and the cathode on
+`GND`. Use one LED per pin or a single common-cathode RGB LED (the three colour
+legs on the pins, the common leg on `GND`).
 
-Red = lockout enabled, green = lockout disabled (blinking). The stock red LED
-can be reused: disconnect the 5 V side of its resistor and feed the resistor
-from both `D6` and `D7`.
-
-![how to wire the stock RGB LED](images/stock-led.png)
-
-The cathodes go back to the Arduino on `D9`/`D10`, which is how each LED is
-switched fully off — that is why the LED blinks instead of just changing colour.
-
-### Single RGB LED (new in v2.0.0)
-
-Use a **common-cathode** 4-pin RGB LED (R/G/B positive legs + one `GND`):
-
-- red → resistor → `D7`
-- blue → resistor → `D6`
-- green → resistor → `D3`
-- common leg → `GND`
-- `D9`/`D10` are unused; leave them disconnected.
-
-One resistor per colour leg (330 Ω for red, 220 Ω for green/blue is a good
-starting point). **Do not** put a resistor on the common leg.
-
-| Colour | Meaning |
-|---|---|
-| 🔴 Red | Lockout enabled (normal operation) |
-| 🟢 Green | Lockout disabled (CIC bypass kicked in) |
-| 🔵 Blue | Feedback overlay: blinks in configuration mode, 2 blinks = combos stored / EEPROM restored, 3 blinks = combo rejected, lit during the in-game reset pulse |
+| Pin | Colour | What it shows |
+|---|---|---|
+| `D7` | 🔴 Red | **Lockout state.** On = CIC enabled (the cartridge passed the handshake). Off = the mod disabled the lockout. |
+| `D6` | 🔵 Blue | **Feedback.** Blinks in configuration mode; 2 blinks = combo stored / EEPROM restored; 3 blinks = combo rejected; lit during the in-game reset pulse. |
+| `D3` | 🟢 Green | **Lockout disabled** (CIC bypassed) and the 80 ms pulse at boot. |
 
 Blue is an **overlay**: it can be on together with red or green (so it looks
 magenta/cyan) and never hides the lockout state.
 
+One resistor per colour (330 Ω for red, 220 Ω for green/blue is a good starting
+point). **Do not** put a resistor on the common leg.
+
 **Boot legend (it is a diagnostic):**
 
 1. **Red** turns on — same as v1.5.0 (lockout enabled).
-2. **One short green pulse (~80 ms) on `D3`** — only v2.0.0 does this. If you
-   see it, the Nano ran the new `setup()` to the end. If the console stays black
-   *and* the pulse appears, the firmware is not the problem.
+2. **One short green pulse (~80 ms) on `D3`** — the Nano ran `setup()` to the
+   end. If you see it and the console stays black, the firmware is not the
+   problem.
 3. **Blue blinks 2×** — fresh/blank EEPROM, default combos written (first boot
    only).
 4. **Red steady** — CIC handshake OK. **Green steady** — handshake failed, the
    lockout was disabled and the console was reset.
 
-**Why blue on `D6` and green on `D3`:** v1.5.0 uses `D7` for red and `D6` for
-its second status colour. Keeping blue on `D6` means a v1.5.0 image flashed back
-on top still blinks red/blue on this LED. `D3` is unused by v1.5.0, so the green
-channel is simply ignored there. Prefer green on `D6`? Compile with
-`-DRGB_GREEN_ON_D6` (then blue moves to `D3`).
+### Already have the v1.x two-LED wiring?
+
+No rewiring needed. v1.x drove the anode from `D6`/`D7` and switched the cathode
+on `D9`/`D10`; v2.1.0 holds `D9`/`D10` `LOW` and lights the LEDs from the anode,
+exactly the same way. The only channel missing on that wiring is green (`D3`,
+which v1.x never used) — the status stays red/blue, as it always did.
+
+![how to wire the stock RGB LED](images/stock-led.png)
+
+The way back works too: `D7` and `D6` are exactly the pins v1.5.0 uses, so you
+can **flash v1.5.0 back on top without rewiring**. It shows solid red/blue on
+that LED and simply ignores `D3`.
 
 ---
 
@@ -270,7 +250,7 @@ clock. There is no electrical interference with a flashcart, a multitap or a
 second controller. The only possible interference is logical: two devices
 reacting to the same buttons.
 
-The v2.0.0 defaults were chosen to avoid every documented flashcart shortcut:
+The v2.x defaults were chosen to avoid every documented flashcart shortcut:
 
 | SD2SNES / FXPak shortcut | Combo | Collides? |
 |---|---|---|
@@ -292,18 +272,21 @@ contain `Start + L` and `Start + R`, which are the flashcart **load state** and
 
 ---
 
-## 🚫 Installing without the controller wires
+## 🚫 Installing without the pads
 
 The CIC bypass runs in `setup()` and only uses `D4`, `D5` and `D8`. Without
 `A0/A1/A2` you lose in-game reset and combo configuration — nothing else.
 
 Two options:
 
-1. **Flash the `-nocontroller` build** (recommended). The controller code is
-   not compiled at all: no bus polling, no timeouts, no phantom input.
-2. **Flash the normal build and just don't wire them.** Safe in v2.0.0 (plain
+1. **Flash `sicksnes-v2.1.0-nopads.hex`** (recommended). The pad code is not
+   compiled at all: no bus polling, no timeouts, no phantom input.
+2. **Flash the normal build and just don't wire them.** Safe in v2.1.0 (plain
    inputs + timeouts), but the firmware still wakes up once per frame to check
    the bus.
+
+Building from source? That is the choice `config.h` gives you: uncomment
+`PADS_OFF` (or `PADS_ON` to make it explicit that the pads are wired).
 
 > v1.x was **not** safe in this scenario: floating pins with no timeout could
 > hang the firmware or produce random buttons.
@@ -356,35 +339,40 @@ no video). It is not damage — restore the Arduino's 5 V and it boots again.
 
 ## 🛠️ Configuring and building
 
-Everything is configured in **one file: `sicksnes/config.h`**. No flags to
-memorise, no code to edit — just uncomment the line for your wiring, the way
-the classic Arduino mods work.
+The configuration is **one file: `sicksnes/config.h`**. Two choices, the way the
+classic Arduino mods work: delete the `//` from the line you want.
 
 ```cpp
 // ---------------------------------------------------------------------------
-//  1) LED
+//  PADS  --  leitura dos controles na porta do SNES (fios A0/A1/A2)
 // ---------------------------------------------------------------------------
-//  PADRAO: dois LEDs discretos (anodo em D6/D7, catodo chaveado em D9/D10).
-//  Se a sua montagem e essa, nao descomente nada.
+//  PADS_ON  : reset em jogo + modo de configuracao de combos.  (padrao)
+//  PADS_OFF : so o bypass do CIC. Menos codigo, nada de leitura de controle.
 //
-//  LED RGB unico de CATODO comum (a perna comum vai no GND):
-//#define HAS_RGB_LED 1
-//
-//  LED RGB unico de ANODO comum (a perna comum vai no +5 V):
-//  descomente as DUAS linhas abaixo.
-//#define HAS_RGB_LED 1
-//#define RGB_COMMON_ANODE 1
+//  Descomente UMA das duas linhas abaixo. Se nao descomentar nenhuma,
+//  fica PADS_ON.
+
+//#define PADS_ON
+//#define PADS_OFF
+
+// ---------------------------------------------------------------------------
+//  DEPURACAO  --  opcional
+// ---------------------------------------------------------------------------
+//#define SICKNES_DEBUG 1
 ```
 
-### With the Arduino IDE (easy way)
+The LEDs are deliberately not here: `D3`, `D6` and `D7` are positive outputs
+that behave the same in every build — see [The LEDs](#-the-leds).
+
+### With the Arduino IDE
 
 1. Open `sicksnes/sicksnes.ino`.
 2. Click the **`config.h`** tab (next to the `.ino`).
-3. Delete the leading `//` from the lines that match your hardware.
+3. Delete the `//` from the line for your wiring.
 4. Compile and upload as usual.
 
-Changed nothing? Then you are building the default wiring: two LEDs on
-`D6`/`D7` plus the three controller wires on `A0`/`A1`/`A2`.
+Changed nothing? Then you get the default: pads on (`A0`/`A1`/`A2`) and LEDs on
+`D3`/`D6`/`D7`.
 
 ### From the command line (arduino-cli)
 
@@ -392,47 +380,38 @@ Changed nothing? Then you are building the default wiring: two LEDs on
 arduino-cli compile --fqbn arduino:avr:nano ./sicksnes
 ```
 
-The very same options also work as build flags, without editing any file —
-handy for scripts and CI:
+The same choices exist as build flags, without editing any file:
 
 ```bash
-# RGB LED + controller
-arduino-cli compile --fqbn arduino:avr:nano \
-  --build-property "compiler.cpp.extra_flags=-DHAS_RGB_LED=1" ./sicksnes
+# pads on (default)
+arduino-cli compile --fqbn arduino:avr:nano ./sicksnes
 
-# RGB LED, no controller
+# pads off
 arduino-cli compile --fqbn arduino:avr:nano \
-  --build-property "compiler.cpp.extra_flags=-DHAS_CONTROLLER=0 -DHAS_RGB_LED=1" ./sicksnes
+  --build-property "compiler.cpp.extra_flags=-DHAS_CONTROLLER=0" ./sicksnes
+
+# with serial debug
+arduino-cli compile --fqbn arduino:avr:nano \
+  --build-property "compiler.cpp.extra_flags=-DSICKNES_DEBUG=1" ./sicksnes
 ```
 
 ### The options
 
-| Option (in `config.h` or `-D`) | Default | Effect |
+| Option | Default | Effect |
 |---|---|---|
-| `HAS_CONTROLLER` | `1` | `0` compiles the controller/combos out (no `A0/A1/A2`). |
-| `HAS_RGB_LED` | `0` | `1` uses one RGB LED instead of two discrete LEDs. |
-| `RGB_COMMON_ANODE` | `0` | `1` for a common-anode RGB LED (common leg to +5 V). |
-| `RGB_GREEN_ON_D6` | off | Swaps green/blue: green on `D6`, blue on `D3`. |
+| `PADS_ON` | on | Pads read on `A0`/`A1`/`A2`: in-game reset + combos. This is the default. |
+| `PADS_OFF` | — | Compiles the pad code out: CIC bypass only. |
 | `SICKNES_DEBUG` | `0` | `1` turns on the Serial Monitor (9600) with the compiled config and the combos it sees. |
 
-> `RGB_GREEN_ON_D6` works by **presence of the line** (`#define RGB_GREEN_ON_D6`,
-> no value). To turn it off, delete the line — do not use `0`.
->
-> Enabling an RGB-only option (`RGB_COMMON_ANODE` or `RGB_GREEN_ON_D6`) without
-> `HAS_RGB_LED 1` stops the build with an explanatory message instead of
-> producing the wrong firmware.
+On the command line those become `-DHAS_CONTROLLER=0` (same as `PADS_OFF`) and
+`-DSICKNES_DEBUG=1` — they are literally the defines `config.h` sets.
 
-### Which combination matches each prebuilt image?
+### Which choice matches each prebuilt image?
 
-| `HAS_RGB_LED` | `HAS_CONTROLLER` | Same as |
-|---|---|---|
-| `0` | `1` | `sicksnes-v2.0.0-2led-controller.hex` |
-| `0` | `0` | `sicksnes-v2.0.0-2led-nocontroller.hex` |
-| `1` | `1` | `sicksnes-v2.0.0-rgb-controller.hex` |
-| `1` | `0` | `sicksnes-v2.0.0-rgb-nocontroller.hex` |
-
-Verified: editing `config.h` and compiling produces **exactly** the same `.hex`
-as the command-line flags — the two ways are equivalent.
+| `config.h` | Same as |
+|---|---|
+| everything commented (default) | `firmware/sicksnes-v2.1.0.hex` |
+| `PADS_OFF` | `firmware/sicksnes-v2.1.0-nopads.hex` |
 
 ---
 
@@ -453,7 +432,7 @@ Older firmware could fail to boot SFA2 when the Arduino was flashed through the
 default bootloader, because `D8` floats during the bootloader: the console boots
 with the lockout disabled and the Arduino enables it afterwards.
 
-v2.0.0 mitigates this with the recommended 10 kΩ pull-up on CIC pin 4 (keeps
+v2.x mitigates this with the recommended 10 kΩ pull-up on CIC pin 4 (keeps
 `CONF` enabled while the Arduino boots). The old workaround — hold the **reset
 button** until the Arduino initializes (~1.8 s after power-up) — still works.
 
@@ -490,7 +469,7 @@ sequence stayed.
 
 Timing is matched too: v1.5.0 samples the CIC handshake **1700 ms** after the
 reset line returns (1500 ms `delay` + 200 ms spent inside `redLedOn()`), and
-v2.0.0 uses `CIC_CHECK_DELAY_MS = 1700` for the same sample point.
+the firmware uses `CIC_CHECK_DELAY_MS = 1700` for the same sample point.
 
 ### How the CIC check works
 
@@ -506,17 +485,17 @@ behaves backwards, flip `CIC_DATA_RUNNING_LEVEL` in `pins.h`.
 
 ### EEPROM
 
-Combos live at **address 64** in v2.0.0, with magic + version + checksum + range
+Combos live at **address 64** in v2.x, with magic + version + checksum + range
 and duplicate validation. v1.5.0 uses address 0, so:
 
-- flashing v2.0.0 does not destroy the v1.5.0 combos, and
+- flashing v2.x does not destroy the v1.5.0 combos, and
 - flashing v1.5.0 back restores them untouched (no garbage, no phantom combos).
 
 ### Controller pins
 
 v1.x defined `latch 19 / clock 20 / Sdata 21`, which on a Nano are **A5/A6/A7**,
 while `PINC` bit reads used **PC0/PC1/PC2** (`A0/A1/A2`). It worked only because
-all six pins default to inputs after reset. v2.0.0 configures the real
+all six pins default to inputs after reset. v2.x configures the real
 `A0/A1/A2` as plain inputs and reads `PINC` directly inside one clock phase.
 
 ---
@@ -526,10 +505,10 @@ all six pins default to inputs after reset. v2.0.0 configures the real
 | Symptom | Check |
 |---|---|
 | Console dead (power LED on, no video) | Is the Arduino powered? An unpowered Nano clamps `/RESET` through its protection diodes. Reconnect the 5 V (or remove the `D4` wire to confirm). |
-| RGB build: no green pulse at boot | The Nano did not reach the end of `setup()`. Check the flash and the 5 V. |
+| No green pulse at boot | The Nano did not reach the end of `setup()`. Check the flash and the 5 V. |
 | Green LED steady, console resets in a loop | The CIC handshake is being read as failed. Confirm `D8` → CIC pin 4 is really lifted. |
 | Blue never lights | The only "always visible" blue is the EEPROM blink on first boot and the config mode — blue is feedback, not a status light. |
-| Combos do nothing | `A0/A1/A2` wired? Did you flash a `-nocontroller` build? |
+| Combos do nothing | `A0/A1/A2` wired? Did you flash the `-nopads` build? |
 | In-game reset also hits the flashcart | You are using v1.x combos (`Start+L/R`). Restore the defaults (`L+R+A+B` at power-on). |
 | `avrdude: Device signature = 00 00 00` / `FF FF FF` | ISP wiring or power, not the hex. With **Arduino as ISP**: `D10` → target `RESET` (ICSP pin 5, **not** the Uno's own ICSP pin 5), `D11/D12/D13`, `GND`, one 5 V source only, and a 10 µF cap between `RESET` and `GND` **on the programmer**. Never use `-F`. |
 
@@ -537,25 +516,24 @@ all six pins default to inputs after reset. v2.0.0 configures the real
 
 ## 📝 Changelog
 
-### Unreleased
-- **`sicksnes/config.h`**: a single file to pick your wiring. Instead of passing
-  `-D` flags, you uncomment the line for your install in `config.h` and compile
-  from the Arduino IDE. The flags still work and produce **exactly** the same
-  binary (verified byte by byte on all four variants).
-- **`SICKNES_DEBUG`**: optional debug output from `config.h`, with a summary of
-  the compiled configuration and the combos seen on the Serial Monitor. Off by
-  default, so the default binary does not change.
-- **Config sanity check**: enabling `RGB_COMMON_ANODE` or `RGB_GREEN_ON_D6`
-  without `HAS_RGB_LED 1` now stops the build with a clear message.
+### v2.1.0
+- **`sicksnes/config.h`**: a single file with the choices, PsNee style. `PADS_ON`
+  / `PADS_OFF` for the pads and `SICKNES_DEBUG` for the serial port. No flags,
+  no code edits. The equivalent flags (`-DHAS_CONTROLLER=0`,
+  `-DSICKNES_DEBUG=1`) still work and produce the same binary.
+- **Simplified LEDs**: `D7`, `D6` and `D3` are three positive outputs, one per
+  colour, with no common-anode/cathode option and no channel swapping. Less
+  code, less documentation, same result.
+- **The old two-LED wiring keeps working**: `D9`/`D10` are held `LOW`, so an
+  existing v1.x install needs no rewiring.
+- **Two prebuilt images** instead of four: pads and no pads.
+- `SICKNES_DEBUG` prints the compiled configuration on the Serial Monitor.
 
 ### v2.0.0
 - **Boot path is a line-by-line port of v1.5.0** — `setup()` order, reset helper
   (`D4` HIGH 500 ms → release), `D5` pull-up, plain-input controller pins and the
   1700 ms CIC sample point. `reset.cpp` is verbatim v1.5.0.
-- **Optional single RGB LED** (`-DHAS_RGB_LED=1`): red/green keep the CIC status,
-  blue adds feedback. `D7` = red, `D6` = blue, `D3` = green, so v1.5.0 can be
-  flashed back without rewiring.
-- **Green "alive" pulse** on `D3` at the end of `setup()` (RGB build only).
+- **Green "alive" pulse** on `D3` at the end of `setup()`.
 - **Controller pins fixed**: real `A0/A1/A2` instead of `A5/A6/A7`.
 - **Bus timeouts** in `readControllerFrame()` — no more hanging on a missing pad.
 - **~400 ms combo hold** before acting.
@@ -584,7 +562,7 @@ See the original repository: [lucaslealdev/sicksnes](https://github.com/lucaslea
 - **[JeffWDH/NES-In-Game-Reset](https://github.com/JeffWDH/NES-In-Game-Reset)** —
   the reset approach that inspired this mod.
 - [Pixel que Byte](https://www.youtube.com/@PixelqueByte) — project videos.
-- v2.0.0 maintenance (RGB LED, boot-path restoration, robustness fixes, docs):
+- v2.x maintenance (single config file, boot-path restoration, robustness fixes, docs):
   this fork.
 
 The mod is provided as-is, with no guarantees. Modify and distribute at your own
