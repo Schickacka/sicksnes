@@ -1,18 +1,17 @@
-# firmware/ — prebuilt images for v2.0.0
+# firmware/ — imagens prontas da v2.0.0
 
-Pick the file that matches **your** wiring. If you are not sure, read
-[“Which firmware should I flash?”](../README.md#-which-firmware-should-i-flash)
-in the README.
+Escolha o arquivo que combina com a **sua** fiação. Se estiver em dúvida, leia
+["Qual firmware gravar?"](../README.md#-qual-firmware-gravar) no README.
 
-| File | LED wiring | Controller wires (`A0/A1/A2`) | Sketch size |
+| Arquivo | Fiação dos LEDs | Fios do controle (`A0/A1/A2`) | Tamanho do sketch |
 |---|---|---|---|
-| `sicksnes-v2.0.0-rgb-controller.hex` | one RGB LED | **yes** | 4408 B |
-| `sicksnes-v2.0.0-rgb-nocontroller.hex` | one RGB LED | no | 3054 B |
-| `sicksnes-v2.0.0-2led-controller.hex` | two discrete LEDs | **yes** | 4400 B |
-| `sicksnes-v2.0.0-2led-nocontroller.hex` | two discrete LEDs | no | 3014 B |
+| `sicksnes-v2.0.0-rgb-controller.hex` | um LED RGB | **sim** | 4408 B |
+| `sicksnes-v2.0.0-rgb-nocontroller.hex` | um LED RGB | não | 3054 B |
+| `sicksnes-v2.0.0-2led-controller.hex` | dois LEDs comuns | **sim** | 4400 B |
+| `sicksnes-v2.0.0-2led-nocontroller.hex` | dois LEDs comuns | não | 3014 B |
 
-These are **application-only** images: flash the `.hex`, do not touch the fuses,
-and do not flash an `.eep` file.
+São imagens **só da aplicação**: grave o `.hex`, não mexa nos fuses e não grave
+arquivo `.eep`.
 
 ## Checksums (SHA-256)
 
@@ -31,7 +30,7 @@ Get-FileHash .\sicksnes-v2.0.0-rgb-controller.hex -Algorithm SHA256
 sha256sum sicksnes-v2.0.0-rgb-controller.hex
 ```
 
-## How these were built
+## Como essas imagens foram geradas
 
 ```bash
 arduino-cli compile --fqbn arduino:avr:nano \
@@ -50,9 +49,9 @@ arduino-cli compile --fqbn arduino:avr:nano \
   --output-dir out ./sicksnes
 ```
 
-## Credits
+## Créditos
 
-The mod, the hardware design and the v1.x firmware are by
+O mod, o projeto de hardware e o firmware v1.x são de
 **[@lucaslealdev](https://github.com/lucaslealdev)** —
 [github.com/lucaslealdev/sicksnes](https://github.com/lucaslealdev/sicksnes).
-v2.0.0 is a maintenance fork under **GPL-3.0**.
+A v2.0.0 é um fork de manutenção, sob **GPL-3.0**.

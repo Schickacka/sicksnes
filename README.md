@@ -1,139 +1,141 @@
 # 🎮 sick snes — v2.0.0
 
-![sick snes logo](images/logo.jpg)
+![logo do sick snes](images/logo.jpg)
 
-**Automatic lockout chip (CIC) toggle and in-game reset for the Super Nintendo.**
+**Troca automática do chip de lockout (CIC) e reset em jogo para o Super Nintendo.**
 
-If a cartridge fails the CIC handshake, the mod disables the lockout chip and
-resets the console automatically, so imports, homebrew and flashcarts boot
-without any switch. On top of that it gives you soft/long reset from the
-controller, with no case mod and no extra button.
+Se o cartucho não passa no handshake do CIC, o mod desliga o lockout e reseta o
+console sozinho — imports, homebrew e flashcarts funcionam sem nenhum switch.
+Além disso você ganha reset curto e reset longo pelo controle, sem furar o case
+e sem botão extra.
+
+➡️ English version: [README.en.md](README.en.md)
 
 ---
 
-## 🙌 Credits — read this first
+## 🙌 Créditos — leia primeiro
 
-**This is a fork. The original project, the hardware research and the entire
-v1.x firmware are by [@lucaslealdev](https://github.com/lucaslealdev).**
+**Este é um fork. O projeto original, a pesquisa de hardware e todo o firmware
+v1.x são de [@lucaslealdev](https://github.com/lucaslealdev).**
 
-> **Original repository: [github.com/lucaslealdev/sicksnes](https://github.com/lucaslealdev/sicksnes)**
+> **Repositório original: [github.com/lucaslealdev/sicksnes](https://github.com/lucaslealdev/sicksnes)**
 > YouTube: [Pixel que Byte](https://www.youtube.com/@PixelqueByte)
 
-Everything that actually makes this mod work — lifting CIC pin 4, tapping the
-reset line, reading the controller bus, the LED scheme, the in-game reset idea —
-was designed, built and validated by him (with a nod to
-[JeffWDH/NES-In-Game-Reset](https://github.com/JeffWDH/NES-In-Game-Reset) for
-the reset idea). v2.0.0 is a maintenance release of that work: it keeps the
-proven v1.5.0 behaviour on the boot path and adds an optional single RGB LED
-plus a handful of robustness fixes.
+Tudo o que faz esse mod funcionar — levantar o pino 4 do CIC, soldar no reset,
+ler o barramento do controle, o esquema dos LEDs, a ideia do reset em jogo — foi
+projetado, montado e validado por ele (com crédito a
+[JeffWDH/NES-In-Game-Reset](https://github.com/JeffWDH/NES-In-Game-Reset) pela
+ideia original do reset). A v2.0.0 é uma versão de manutenção desse trabalho:
+mantém o comportamento comprovado da v1.5.0 no caminho de boot e adiciona um LED
+RGB único opcional, mais algumas correções de robustez.
 
-License: **GPL-3.0**, inherited from upstream. See [LICENSE](LICENSE).
+Licença: **GPL-3.0**, herdada do projeto original. Veja [LICENSE](LICENSE).
 
 ---
 
-## 📚 Table of contents
+## 📚 Índice
 
-1. [What's new in v2.0.0](#-whats-new-in-v200)
-2. [Which firmware should I flash?](#-which-firmware-should-i-flash)
-3. [Wiring](#-wiring)
-4. [The LEDs](#-the-leds)
-5. [Controls](#️-controls)
-6. [Configuration mode](#️-configuration-mode)
-7. [SD2SNES / FXPak compatibility](#-sd2snes--fxpak-compatibility)
-8. [Installing without the controller wires](#-installing-without-the-controller-wires)
-9. [Flashing](#-flashing)
-10. [Building from source](#️-building-from-source)
-11. [Compatibility notes](#-compatibility-notes)
-12. [Technical notes](#-technical-notes)
-13. [Troubleshooting](#-troubleshooting)
+1. [Novidades da v2.0.0](#-novidades-da-v200)
+2. [Qual firmware gravar?](#-qual-firmware-gravar)
+3. [Fiação](#-fiação)
+4. [Os LEDs](#-os-leds)
+5. [Comandos](#️-comandos)
+6. [Modo de configuração](#️-modo-de-configuração)
+7. [Compatibilidade com SD2SNES / FXPak](#-compatibilidade-com-sd2snes--fxpak)
+8. [Instalar sem os fios do controle](#-instalar-sem-os-fios-do-controle)
+9. [Gravação](#-gravação)
+10. [Compilar do código](#️-compilar-do-código)
+11. [Notas de compatibilidade](#-notas-de-compatibilidade)
+12. [Notas técnicas](#-notas-técnicas)
+13. [Solução de problemas](#-solução-de-problemas)
 14. [Changelog](#-changelog)
 
 ---
 
-## ✨ What's new in v2.0.0
+## ✨ Novidades da v2.0.0
 
 | | |
 |---|---|
-| 🌈 **Single RGB LED** | One 4-pin RGB LED replaces the two LEDs: red = lockout on, green = lockout off, blue = feedback. `D6` and `D7` stay where v1.x put them, so **v1.5.0 can be flashed back without rewiring**. |
-| 🧭 **Boot path is v1.5.0 verbatim** | `setup()` order, reset helper, CIC pull-up and sample time are identical to the image known to boot. `reset.cpp` is a line-by-line port. |
-| 🎮 **Controller pins actually fixed** | v1.x did `#define latch 19 / clock 20 / Sdata 21`, which configures **A5/A6/A7** on a Nano, while the code read **A0/A1/A2**. v2.0.0 uses the real `A0/A1/A2`. |
-| ⏱️ **Bus timeouts** | A missing controller no longer hangs the loop; a failed read releases all buttons. |
-| ⏳ **Combo hold time** | A combo must be held for ~400 ms, so one glitched frame never resets the console. |
-| 💾 **Validated EEPROM at a new address** | Magic + version + checksum + range checks, stored at **address 64** so v1.5.0's combos (address 0) survive a round trip. |
-| 🕹️ **New default combos** | `L+R+X+Y` / `L+R+A+B` — they do not collide with any SD2SNES/FXPak shortcut. |
-| 💡 **Green "alive" pulse** | On the RGB build, one 80 ms green pulse on `D3` at the end of `setup()` — a free diagnostic channel that v1.5.0 never touches. |
-| 📖 **Docs** | This README, wiring tables, boot legend and a Portuguese version ([README.pt-BR.md](README.pt-BR.md)). |
+| 🌈 **LED RGB único** | Um LED RGB de 4 pinos substitui os dois LEDs: vermelho = lockout ativo, verde = lockout desligado, azul = feedback. `D6` e `D7` continuam onde a v1.x deixou, então **dá para regravar a v1.5.0 sem ressoldar nada**. |
+| 🧭 **Caminho de boot idêntico à v1.5.0** | Ordem do `setup()`, rotina de reset, pull-up do CIC e instante de amostragem são iguais aos da imagem que liga. `reset.cpp` é cópia linha por linha. |
+| 🎮 **Pinos do controle realmente corrigidos** | A v1.x fazia `#define latch 19 / clock 20 / Sdata 21`, que no Nano são **A5/A6/A7**, enquanto o código lia **A0/A1/A2**. A v2.0.0 usa os `A0/A1/A2` de verdade. |
+| ⏱️ **Timeout no barramento** | Controle ausente não trava mais o loop; leitura falha = todos os botões soltos. |
+| ⏳ **Combo precisa de ~400 ms** | Uma única frame com ruído não reseta mais o console. |
+| 💾 **EEPROM validada e em endereço novo** | Magic + versão + checksum + faixa, gravada no **endereço 64** — os combos da v1.5.0 (endereço 0) sobrevivem à ida e à volta. |
+| 🕹️ **Novos combos padrão** | `L+R+X+Y` / `L+R+A+B` — não colidem com nenhum atalho do SD2SNES/FXPak. |
+| 💡 **Piscada verde de "vivo"** | No build RGB, um pulso verde de 80 ms no `D3` no fim do `setup()` — canal de diagnóstico que a v1.5.0 não usa. |
+| 📖 **Documentação** | Este README, tabelas de fiação, legenda do boot e a versão em inglês ([README.en.md](README.en.md)). |
 
 ---
 
-## 🧭 Which firmware should I flash?
+## 🧭 Qual firmware gravar?
 
-Two independent things decide the firmware: **how the LEDs are wired** and
-**whether `A0`/`A1`/`A2` are soldered**.
+Duas coisas independentes definem o firmware: **como os LEDs estão ligados** e
+**se `A0`/`A1`/`A2` estão soldados**.
 
-| Firmware | LED | Controller | Flash this when |
+| Firmware | LED | Controle | Grave quando |
 |---|---|---|---|
-| `firmware/sicksnes-v2.0.0-rgb-controller.hex` | RGB | yes | You added a single RGB LED **and** wired `A0/A1/A2`. Most complete build. |
-| `firmware/sicksnes-v2.0.0-rgb-nocontroller.hex` | RGB | no | You added a single RGB LED but did **not** wire `A0/A1/A2`. CIC bypass + LEDs only. |
-| `firmware/sicksnes-v2.0.0-2led-controller.hex` | 2 LEDs | yes | Stock v1.x LED wiring + controller wires. The classic setup. |
-| `firmware/sicksnes-v2.0.0-2led-nocontroller.hex` | 2 LEDs | no | Stock v1.x LED wiring, no controller wires. Smallest image. |
+| `firmware/sicksnes-v2.0.0-rgb-controller.hex` | RGB | sim | Você colocou um LED RGB **e** ligou `A0/A1/A2`. Build mais completo. |
+| `firmware/sicksnes-v2.0.0-rgb-nocontroller.hex` | RGB | não | LED RGB, mas **sem** `A0/A1/A2`. Só bypass de CIC + LEDs. |
+| `firmware/sicksnes-v2.0.0-2led-controller.hex` | 2 LEDs | sim | Fiação de LED da v1.x + fios do controle. O setup clássico. |
+| `firmware/sicksnes-v2.0.0-2led-nocontroller.hex` | 2 LEDs | não | Fiação de LED da v1.x, sem fios do controle. Menor imagem. |
 
-### Why do these four options exist?
+### Por que essas opções existem?
 
-- **"With controller" vs "without controller".** The CIC bypass only needs
-  `D4`, `D5` and `D8`. Plenty of installs stop there and never solder the three
-  controller taps, because the mod works fine without them — you just lose
-  in-game reset and combo configuration. v1.x was *not* safe in that case: the
-  pins floated with no timeout, so the firmware could hang or read phantom
-  buttons. v2.0.0 fixes the firmware **and** ships a build with the controller
-  code compiled out (`HAS_CONTROLLER=0`): no polling, no interrupts, no chance
-  of phantom input, and ~1.4 KB less flash.
-- **"RGB" vs "2 LEDs".** The 2-LED build is the original scheme (anode on
-  `D6`/`D7`, switched cathode on `D9`/`D10`). The RGB build drives one pin per
-  colour and uses `D6`/`D7` for the same two colours v1.x used, plus `D3` for
-  green. That specific mapping is what lets you **flash v1.5.0 back on top
-  without rewiring**: v1.5.0 shows solid red/blue on that LED and simply ignores
-  `D3`.
+- **"Com controle" x "sem controle".** O bypass do CIC só precisa de `D4`, `D5`
+  e `D8`. Muita instalação para por aí e nunca solda os três fios do controle,
+  porque o mod funciona sem eles — você só perde o reset em jogo e a
+  configuração de combos. A v1.x **não era segura** nesse cenário: os pinos
+  ficavam flutuando sem timeout, e o firmware podia travar ou ler botões
+  fantasmas. A v2.0.0 corrige o firmware **e** entrega um build com o código do
+  controle removido (`HAS_CONTROLLER=0`): sem polling, sem chance de entrada
+  fantasma e ~1,4 KB menos de flash.
+- **"RGB" x "2 LEDs".** O build de 2 LEDs é o esquema original (ânodo em
+  `D6`/`D7`, cátodo chaveado em `D9`/`D10`). O build RGB usa um pino por cor e
+  mantém `D6`/`D7` nas mesmas duas cores da v1.x, com o verde novo em `D3`. Esse
+  mapeamento específico é o que permite **regravar a v1.5.0 por cima sem
+  ressoldar**: a v1.5.0 acende vermelho/azul sólidos nesse LED e simplesmente
+  ignora o `D3`.
 
-You can always flash the wrong pairing — the pins are inputs, nothing is
-damaged — you just get a feature you cannot use, or feedback on a channel you
-did not wire.
+Gravar a combinação "errada" não danifica nada — os pinos são entradas — você só
+fica com um recurso que não consegue usar, ou com feedback num canal que não
+ligou.
 
-| Build | Flash used | File |
+| Build | Flash usada | Arquivo |
 |---|---|---|
-| RGB + controller | 4408 B | 12.417 B |
-| RGB, no controller | 3054 B | 8.604 B |
-| 2 LEDs + controller | 4400 B | 12.388 B |
-| 2 LEDs, no controller | 3014 B | 8.498 B |
+| RGB + controle | 4408 B | 12.417 B |
+| RGB, sem controle | 3054 B | 8.604 B |
+| 2 LEDs + controle | 4400 B | 12.388 B |
+| 2 LEDs, sem controle | 3014 B | 8.498 B |
 
 ---
 
-## 🔌 Wiring
+## 🔌 Fiação
 
-### Main harness
+### Chicote principal
 
-| Arduino pin | Signal | SNES connection |
+| Pino do Arduino | Sinal | Ligação no SNES |
 |---|---|---|
-| `5V` | power | Board VCC |
-| `GND` | power | Board GND |
-| `D4` | `/RESET` (active LOW) | Reset button / reset test point |
-| `D5` | CIC data | **CIC pin 1** |
-| `D8` | CIC `CONF` | **CIC pin 4** (must be lifted) |
-| `D6` | LED, 2nd colour | Blue LED (RGB) / green LED (2-LED) anode |
-| `D7` | LED, red | Red LED anode |
-| `D3` | LED, green | Green LED anode (**RGB build only**) |
-| `D9` | cathode return | Green LED cathode (**2-LED build only**) |
-| `D10` | cathode return | Red LED cathode (**2-LED build only**) |
-| `A0` | controller **latch** | Controller port pin 10 |
-| `A1` | controller **clock** | Controller port pin 8 |
-| `A2` | controller **data** | Controller port pin 6 |
+| `5V` | alimentação | VCC da placa |
+| `GND` | alimentação | GND da placa |
+| `D4` | `/RESET` (ativo em LOW) | Botão de reset / ponto de teste do reset |
+| `D5` | dados do CIC | **CIC pino 1** |
+| `D8` | `CONF` do CIC | **CIC pino 4** (precisa estar levantado) |
+| `D6` | LED, 2ª cor | Ânodo do LED azul (RGB) / verde (2 LEDs) |
+| `D7` | LED, vermelho | Ânodo do LED vermelho |
+| `D3` | LED, verde | Ânodo do LED verde (**só no build RGB**) |
+| `D9` | retorno de cátodo | Cátodo do LED verde (**só no build de 2 LEDs**) |
+| `D10` | retorno de cátodo | Cátodo do LED vermelho (**só no build de 2 LEDs**) |
+| `A0` | **latch** do controle | Porta do controle, pino 10 |
+| `A1` | **clock** do controle | Porta do controle, pino 8 |
+| `A2` | **data** do controle | Porta do controle, pino 6 |
 
-> **CIC pin 4 must be lifted** (disconnected from the board). It is `CONF`, not
-> ground: `+5 V` = lockout enabled, `GND` = lockout disabled (the chip has an
-> internal pull-down). v2.0.0 drives it, so the mod can toggle it at runtime —
-> unlike the classic "cut and ground" mod.
+> **O pino 4 do CIC precisa ser levantado** (desconectado da placa). Ele é o
+> `CONF`, não terra: `+5 V` = lockout ativo, `GND` = lockout desligado (o chip
+> tem pull-down interno). A v2.0.0 o dirige, então o mod liga e desliga o lockout
+> em tempo de execução — diferente do mod clássico de "cortar e aterrar".
 
-### ↻ Reset button (viewed from the PCB bottom)
+### ↻ Botão de reset (visto por baixo da placa)
 
 ```
          __________
@@ -160,9 +162,9 @@ did not wire.
     10 ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾ 18
 ```
 
-`D5` → CIC pin 1 (data), `D8` → CIC pin 4 (`CONF`, lifted).
+`D5` → CIC pino 1 (dados), `D8` → CIC pino 4 (`CONF`, levantado).
 
-### 🎮 SNES controller port (viewed from the PCB bottom)
+### 🎮 Porta do controle SNES (vista por baixo da placa)
 
 ```
     10 _____________________________ 2
@@ -172,354 +174,359 @@ did not wire.
     11 ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾ 1
 ```
 
-`A0` = latch, `A1` = clock, `A2` = data. The Arduino **only reads** these
-lines; it never drives them, so it cannot fight the console, a multitap or a
+`A0` = latch, `A1` = clock, `A2` = data. O Arduino **só lê** essas linhas; ele
+nunca as dirige, então não briga com o console, com um multitap ou com um
 flashcart.
 
 ---
 
-## 💡 The LEDs
+## 💡 Os LEDs
 
-### Two-LED build (v1.x wiring)
+### Build de 2 LEDs (fiação da v1.x)
 
-Red = lockout enabled, green = lockout disabled (blinking). The stock red LED
-can be reused: disconnect the 5 V side of its resistor and feed the resistor
-from both `D6` and `D7`.
+Vermelho = lockout ativo, verde = lockout desligado (piscando). O LED vermelho
+original pode ser reaproveitado: desconecte o lado de 5 V do resistor e alimente
+o resistor pelos dois, `D6` e `D7`.
 
-![how to wire the stock RGB LED](images/stock-led.png)
+![como ligar o LED original](images/stock-led.png)
 
-The cathodes go back to the Arduino on `D9`/`D10`, which is how each LED is
-switched fully off — that is why the LED blinks instead of just changing colour.
+Os cátodos voltam para o Arduino em `D9`/`D10`, e é isso que permite apagar cada
+LED por completo — é por isso que ele pisca em vez de só trocar de cor.
 
-### Single RGB LED (new in v2.0.0)
+### LED RGB único (novo na v2.0.0)
 
-Use a **common-cathode** 4-pin RGB LED (R/G/B positive legs + one `GND`):
+Use um LED RGB de **cátodo comum** (pernas R/G/B positivas + um único `GND`):
 
-- red → resistor → `D7`
-- blue → resistor → `D6`
-- green → resistor → `D3`
-- common leg → `GND`
-- `D9`/`D10` are unused; leave them disconnected.
+- vermelho → resistor → `D7`
+- azul → resistor → `D6`
+- verde → resistor → `D3`
+- perna comum → `GND`
+- `D9`/`D10` não são usados; deixe desconectados.
 
-One resistor per colour leg (330 Ω for red, 220 Ω for green/blue is a good
-starting point). **Do not** put a resistor on the common leg.
+Um resistor por perna de cor (330 Ω no vermelho, 220 Ω no verde/azul é um bom
+ponto de partida). **Não** coloque resistor na perna comum.
 
-| Colour | Meaning |
+| Cor | Significado |
 |---|---|
-| 🔴 Red | Lockout enabled (normal operation) |
-| 🟢 Green | Lockout disabled (CIC bypass kicked in) |
-| 🔵 Blue | Feedback overlay: blinks in configuration mode, 2 blinks = combos stored / EEPROM restored, 3 blinks = combo rejected, lit during the in-game reset pulse |
+| 🔴 Vermelho | Lockout ativo (operação normal) |
+| 🟢 Verde | Lockout desligado (bypass do CIC entrou) |
+| 🔵 Azul | Feedback (overlay): pisca no modo de configuração, 2 piscadas = combos salvos / EEPROM restaurada, 3 piscadas = combo rejeitado, aceso durante o pulso de reset em jogo |
 
-Blue is an **overlay**: it can be on together with red or green (so it looks
-magenta/cyan) and never hides the lockout state.
+O azul é **overlay**: pode acender junto com o vermelho ou o verde (fica
+magenta/ciano) e nunca esconde o estado do lockout.
 
-**Boot legend (it is a diagnostic):**
+**Legenda do boot (é um diagnóstico):**
 
-1. **Red** turns on — same as v1.5.0 (lockout enabled).
-2. **One short green pulse (~80 ms) on `D3`** — only v2.0.0 does this. If you
-   see it, the Nano ran the new `setup()` to the end. If the console stays black
-   *and* the pulse appears, the firmware is not the problem.
-3. **Blue blinks 2×** — fresh/blank EEPROM, default combos written (first boot
-   only).
-4. **Red steady** — CIC handshake OK. **Green steady** — handshake failed, the
-   lockout was disabled and the console was reset.
+1. **Vermelho** acende — igual à v1.5.0 (lockout ativo).
+2. **Um pulso verde curto (~80 ms) no `D3`** — só a v2.0.0 faz isso. Se você viu,
+   o Nano rodou o `setup()` novo até o fim. Se o console ficar preto **e** o
+   pulso aparecer, o problema não é o firmware.
+3. **Azul pisca 2×** — EEPROM nova/vazia, combos padrão gravados (só no primeiro
+   boot).
+4. **Vermelho fixo** — handshake do CIC ok. **Verde fixo** — o handshake falhou,
+   o lockout foi desligado e o console foi resetado.
 
-**Why blue on `D6` and green on `D3`:** v1.5.0 uses `D7` for red and `D6` for
-its second status colour. Keeping blue on `D6` means a v1.5.0 image flashed back
-on top still blinks red/blue on this LED. `D3` is unused by v1.5.0, so the green
-channel is simply ignored there. Prefer green on `D6`? Compile with
-`-DRGB_GREEN_ON_D6` (then blue moves to `D3`).
+**Por que azul no `D6` e verde no `D3`:** a v1.5.0 usa `D7` para vermelho e `D6`
+para a segunda cor de status. Mantendo o azul em `D6`, uma imagem v1.5.0
+regravada por cima continua piscando vermelho/azul nesse LED. O `D3` não é usado
+pela v1.5.0, então o canal verde é simplesmente ignorado lá. Prefere verde no
+`D6`? Compile com `-DRGB_GREEN_ON_D6` (o azul vai para o `D3`).
 
 ---
 
-## 🕹️ Controls
+## 🕹️ Comandos
 
-| Action | Combo |
+| Ação | Combo |
 |---|---|
-| 🔄 **Soft reset** | `L + R + X + Y` (hold ~0.4 s) |
-| 🔄 **Long reset** | `L + R + A + B` (hold ~0.4 s) |
-| ⚙️ **Configuration mode** | hold `L + R + X + Y` while powering on |
-| ♻️ **Restore default combos** | hold `L + R + A + B` while powering on |
+| 🔄 **Reset curto** | `L + R + X + Y` (segurar ~0,4 s) |
+| 🔄 **Reset longo** | `L + R + A + B` (segurar ~0,4 s) |
+| ⚙️ **Modo de configuração** | segurar `L + R + X + Y` ao ligar |
+| ♻️ **Restaurar combos padrão** | segurar `L + R + A + B` ao ligar |
 
-The ~400 ms hold means a single accidental frame never resets the console.
-
----
-
-## ⚙️ Configuration mode
-
-1. Power on the console while holding `L + R + X + Y` — the blue channel starts
-   blinking.
-2. While it blinks, press the 4-button combo you want for **soft reset** →
-   blue blinks **2×** (stored) or **3×** (rejected).
-3. Blue blinks again; press the combo for **long reset** → 2 blinks = stored.
-4. Both combos must be different and all four buttons must be distinct. The new
-   combo cannot be the other one.
-5. Power-cycle to leave configuration mode (there is no automatic exit).
-
-*To restore the defaults, hold `L + R + A + B` while powering on.*
+Os ~400 ms de hold evitam que uma frame com ruído resete o console.
 
 ---
 
-## 🎮 SD2SNES / FXPak compatibility
+## ⚙️ Modo de configuração
 
-The mod only **listens** to the controller bus; the console drives latch and
-clock. There is no electrical interference with a flashcart, a multitap or a
-second controller. The only possible interference is logical: two devices
-reacting to the same buttons.
+1. Ligue o console segurando `L + R + X + Y` — o azul começa a piscar.
+2. Enquanto pisca, aperte o combo de 4 botões para o **reset curto** → azul pisca
+   **2×** (salvo) ou **3×** (rejeitado).
+3. O azul pisca de novo; aperte o combo do **reset longo** → 2 piscadas = salvo.
+4. Os dois combos precisam ser diferentes e os quatro botões precisam ser
+   distintos. O novo combo não pode ser o outro.
+5. Desligue e ligue para sair do modo de configuração (não existe saída
+   automática).
 
-The v2.0.0 defaults were chosen to avoid every documented flashcart shortcut:
+*Para restaurar os padrões, segure `L + R + A + B` ao ligar.*
 
-| SD2SNES / FXPak shortcut | Combo | Collides? |
+---
+
+## 🎮 Compatibilidade com SD2SNES / FXPak
+
+O mod apenas **escuta** o barramento do controle; latch e clock são gerados pelo
+console. Não existe interferência elétrica com flashcart, multitap ou um segundo
+controle. A única interferência possível é lógica: dois dispositivos reagindo aos
+mesmos botões.
+
+Os combos padrão da v2.0.0 foram escolhidos para evitar todos os atalhos
+documentados dos flashcarts:
+
+| Atalho SD2SNES / FXPak | Combo | Colide? |
 |---|---|---|
-| Reset game | `L + R + Select + Start` | No |
-| Reset to menu | `L + R + Select + X` | No |
-| In-game menu (sd2snes+ fork) | `L + R + Y + ←` | No |
-| Save state | `Start + R` | No |
-| Load state | `Start + L` | No |
-| Savestate slot | `Select + D-pad` | No |
-| Cheats on/off | `L + R + Start + A/B` | No |
-| Hooks off (10 s / permanent) | `L + R + Start + X/Y` | No |
+| Reset do jogo | `L + R + Select + Start` | Não |
+| Voltar ao menu | `L + R + Select + X` | Não |
+| Menu em jogo (fork sd2snes+) | `L + R + Y + ←` | Não |
+| Salvar state | `Start + R` | Não |
+| Carregar state | `Start + L` | Não |
+| Slot de savestate | `Select + direcional` | Não |
+| Cheats on/off | `L + R + Start + A/B` | Não |
+| Hooks off (10 s / permanente) | `L + R + Start + X/Y` | Não |
 
-**Do not go back to the v1.x defaults** (`Start + L + R + Left/Down`): they
-contain `Start + L` and `Start + R`, which are the flashcart **load state** and
-**save state** shortcuts — every soft reset would also hit the savestate.
+**Não volte para os padrões da v1.x** (`Start + L + R + Esquerda/Baixo`): eles
+contêm `Start + L` e `Start + R`, que são os atalhos de **carregar** e **salvar
+state** do flashcart — todo reset curto também dispararia um savestate.
 
-> While the SD2SNES in-game menu is open the game is paused, but the Arduino
-> still sees the real pad. Avoid pressing the sick snes combos inside that menu.
-
----
-
-## 🚫 Installing without the controller wires
-
-The CIC bypass runs in `setup()` and only uses `D4`, `D5` and `D8`. Without
-`A0/A1/A2` you lose in-game reset and combo configuration — nothing else.
-
-Two options:
-
-1. **Flash the `-nocontroller` build** (recommended). The controller code is
-   not compiled at all: no bus polling, no timeouts, no phantom input.
-2. **Flash the normal build and just don't wire them.** Safe in v2.0.0 (plain
-   inputs + timeouts), but the firmware still wakes up once per frame to check
-   the bus.
-
-> v1.x was **not** safe in this scenario: floating pins with no timeout could
-> hang the firmware or produce random buttons.
+> Com o menu do SD2SNES aberto o jogo fica pausado, mas o Arduino continua vendo
+> o controle real. Evite apertar os combos do sick snes dentro desse menu.
 
 ---
 
-## 💻 Flashing
+## 🚫 Instalar sem os fios do controle
 
-Prebuilt images are in [`firmware/`](firmware/): pick the one that matches your
-wiring (see [the table above](#-which-firmware-should-i-flash)). Flash the
-**application** hex, leave the fuses alone, and do not flash an `.eep` file.
+O bypass do CIC roda no `setup()` e usa só `D4`, `D5` e `D8`. Sem `A0/A1/A2`
+você perde o reset em jogo e a configuração de combos — nada além disso.
 
-### 💽 Via USB (Arduino bootloader)
+Duas opções:
 
-1. Connect the Nano/Uno over USB.
-2. Upload the sketch (Arduino IDE) or the `.hex` (AVRDUDESS with programmer
+1. **Grave o build `-nocontroller`** (recomendado). O código do controle não é
+   compilado: sem polling, sem timeout, sem entrada fantasma.
+2. **Grave o build normal e simplesmente não ligue os fios.** É seguro na v2.0.0
+   (entradas simples + timeouts), mas o firmware ainda acorda uma vez por frame
+   para checar o barramento.
+
+> A v1.x **não era segura** aqui: pinos flutuando sem timeout podiam travar o
+> firmware ou gerar botões aleatórios.
+
+---
+
+## 💻 Gravação
+
+As imagens prontas estão em [`firmware/`](firmware/): escolha a que casa com a
+sua fiação (veja [a tabela acima](#-qual-firmware-gravar)). Grave o hex da
+**aplicação**, não mexa em fuses e não grave arquivo `.eep`.
+
+### 💽 Via USB (bootloader do Arduino)
+
+1. Conecte o Nano/Uno no USB.
+2. Envie o sketch (Arduino IDE) ou o `.hex` (AVRDUDESS com programador
    `Arduino`, 115200 baud).
-3. With the stock bootloader, `D8` floats for ~1.5–2 s while the board boots.
-   With the recommended 10 kΩ pull-up on CIC pin 4 the lockout stays enabled
-   during that window; without it the console boots with the lockout disabled
-   and a few games (notably *Street Fighter Alpha 2*) may misbehave.
+3. Com o bootloader original, o `D8` fica flutuando por ~1,5–2 s enquanto a placa
+   inicializa. Com o pull-up recomendado de 10 kΩ no pino 4 do CIC o lockout
+   fica ativo nessa janela; sem ele o console liga com o lockout desligado e
+   alguns jogos (principalmente *Street Fighter Alpha 2*) podem falhar.
 
-### 🧰 Recommended: USBasp (no bootloader, faster startup)
+### 🧰 Recomendado: USBasp (sem bootloader, boot mais rápido)
 
-1. Install the driver with [Zadig](https://zadig.akeo.ie/): `Options > List All
-   Devices`, pick `USBasp`, choose `libusb-win32` (or `libusbK`), `Install
-   Driver`.
-2. Open **Extreme Burner - AVR**, select **ATmega328P**, `File > Open Flash`,
-   load the `.hex`, then `Write All`.
+1. Instale o driver com o [Zadig](https://zadig.akeo.ie/): `Options > List All
+   Devices`, escolha o `USBasp`, marque `libusb-win32` (ou `libusbK`) e clique em
+   `Install Driver`.
+2. Abra o **Extreme Burner - AVR**, selecione **ATmega328P**, `File > Open
+   Flash`, carregue o `.hex` e clique em `Write All`.
 
-> ⚠️ A "signature mismatch" warning is safe to ignore for an ATmega328PB (it has
-> a different signature from the 328P but is compatible for this mod).
+> ⚠️ Aviso de "signature mismatch" pode ser ignorado em ATmega328PB (a assinatura
+> é diferente do 328P, mas ele é compatível para este mod).
 
-### ⚡ Practical rule for an installed mod
+### ⚡ Regra prática com o mod já instalado
 
-Never have two 5 V sources on the Arduino at the same time:
+Nunca deixe duas fontes de 5 V no Arduino ao mesmo tempo:
 
-- **Console powered, Arduino powered by the console:** disconnect only the 5 V
-  wire coming from the SNES before plugging the programmer, keep `GND` and all
-  signals.
-- **Console off:** power the Arduino from the programmer instead (a diode on the
-  5 V line, band towards the Arduino, keeps the programmer from feeding the
+- **Console ligado, Arduino alimentado pelo console:** desconecte só o fio de
+  5 V que vem do SNES antes de plugar o programador, mantendo `GND` e todos os
+  sinais.
+- **Console desligado:** alimente o Arduino pelo programador (um diodo no fio de
+  5 V, faixa voltada para o Arduino, impede o programador de alimentar o
   console).
 
-If the Arduino is unpowered while wired to the console, its protection diodes
-can clamp the SNES `/RESET` line and the console will look dead (power LED on,
-no video). It is not damage — restore the Arduino's 5 V and it boots again.
+Se o Arduino estiver sem energia e continuar ligado ao console, os diodos de
+proteção dele podem grampear a linha de `/RESET` do SNES e o console parece
+morto (LED de power aceso, sem vídeo). Não é dano: devolva os 5 V ao Arduino e
+ele volta a ligar.
 
 ---
 
-## 🛠️ Building from source
+## 🛠️ Compilar do código
 
 ```bash
 arduino-cli compile --fqbn arduino:avr:nano ./sicksnes
 ```
 
-Build flags (all optional, defined in `sicksnes/pins.h` or passed with
+Flags de build (todas opcionais, definidas em `sicksnes/pins.h` ou passadas com
 `--build-property "compiler.cpp.extra_flags=-D..."`):
 
-| Flag | Default | Effect |
+| Flag | Padrão | Efeito |
 |---|---|---|
-| `HAS_CONTROLLER` | `1` | `0` compiles the controller/combos out (no `A0/A1/A2`). |
-| `HAS_RGB_LED` | `0` | `1` uses one RGB LED instead of two discrete LEDs. |
-| `RGB_COMMON_ANODE` | `0` | `1` for a common-anode RGB LED (common leg to +5 V). |
-| `RGB_GREEN_ON_D6` | off | Swaps green/blue: green on `D6`, blue on `D3`. |
+| `HAS_CONTROLLER` | `1` | `0` remove o controle/combos do build (sem `A0/A1/A2`). |
+| `HAS_RGB_LED` | `0` | `1` usa um LED RGB em vez de dois LEDs. |
+| `RGB_COMMON_ANODE` | `0` | `1` para LED RGB de ânodo comum (perna comum em +5 V). |
+| `RGB_GREEN_ON_D6` | desligado | Troca verde/azul: verde no `D6`, azul no `D3`. |
 
-Examples:
+Exemplos:
 
 ```bash
-# RGB LED + controller
+# LED RGB + controle
 arduino-cli compile --fqbn arduino:avr:nano \
   --build-property "compiler.cpp.extra_flags=-DHAS_RGB_LED=1" ./sicksnes
 
-# RGB LED, no controller
+# LED RGB, sem controle
 arduino-cli compile --fqbn arduino:avr:nano \
   --build-property "compiler.cpp.extra_flags=-DHAS_CONTROLLER=0 -DHAS_RGB_LED=1" ./sicksnes
 ```
 
 ---
 
-## 🔗 Compatibility
+## 🔗 Notas de compatibilidade
 
-| SNES model | With bootloader (USB) | No bootloader (USBasp) |
+| Modelo de SNES | Com bootloader (USB) | Sem bootloader (USBasp) |
 |---|---|---|
-| SNS-CPU-1CHIP-02 | ✅ Full | ✅ Full |
-| SNS-CPU-1CHIP-03 | ⚠️ Mitigated (see SFA2 note) | ✅ Full |
-| SNS-CPU-GPM-02 | not tested | ✅ Full |
-| SNN-CPU-01 (baby jr) | not tested | ✅ Full |
+| SNS-CPU-1CHIP-02 | ✅ Completo | ✅ Completo |
+| SNS-CPU-1CHIP-03 | ⚠️ Mitigado (veja nota do SFA2) | ✅ Completo |
+| SNS-CPU-GPM-02 | não testado | ✅ Completo |
+| SNN-CPU-01 (baby jr) | não testado | ✅ Completo |
 
-Every other SNES board should be compatible.
+Qualquer outra placa de SNES deve ser compatível.
 
 ### ⚠️ *Street Fighter Alpha 2*
 
-Older firmware could fail to boot SFA2 when the Arduino was flashed through the
-default bootloader, because `D8` floats during the bootloader: the console boots
-with the lockout disabled and the Arduino enables it afterwards.
+Firmwares antigos podiam falhar ao bootar SFA2 quando o Arduino era gravado pelo
+bootloader padrão, porque o `D8` fica flutuando durante o bootloader: o console
+liga com o lockout desligado e o Arduino o ativa depois.
 
-v2.0.0 mitigates this with the recommended 10 kΩ pull-up on CIC pin 4 (keeps
-`CONF` enabled while the Arduino boots). The old workaround — hold the **reset
-button** until the Arduino initializes (~1.8 s after power-up) — still works.
+A v2.0.0 mitiga com o pull-up recomendado de 10 kΩ no pino 4 do CIC (mantém o
+`CONF` ativo enquanto o Arduino inicializa). O workaround antigo — segurar o
+**botão de reset** até o Arduino inicializar (~1,8 s após ligar) — continua
+funcionando.
 
-### ⚠️ Regional lockout is not region conversion
+### ⚠️ Lockout regional não é conversão de região
 
-Disabling the CIC only removes the **lockout** check. It does not change the
-video mode, the 50/60 Hz timing or the `PALMODE` pins. PAL games on an NTSC
-console (or the other way around) may still fail to boot or run at the wrong
-speed. On SHVC-CPU-01 boards this needs additional region/50 Hz work, which is
-outside the scope of this mod.
+Desligar o CIC remove só a checagem de **lockout**. Não muda o modo de vídeo, o
+timing de 50/60 Hz nem os pinos `PALMODE`. Jogos PAL num console NTSC (ou o
+contrário) ainda podem não bootar ou rodar na velocidade errada. Em placas
+SHVC-CPU-01 isso exige trabalho extra de região/50 Hz, fora do escopo do mod.
 
-### ⚠️ SA-1 games and a disabled lockout
+### ⚠️ Jogos SA-1 e lockout desligado
 
-A few SA-1 titles (*Super Mario RPG*, *Kirby Super Star*) check the CIC state
-and may refuse to boot when the lockout is disabled. Carts that pass the
-handshake keep the lockout enabled, so the mod does not affect them; this only
-matters if the CIC was disabled for another reason.
+Alguns títulos SA-1 (*Super Mario RPG*, *Kirby Super Star*) checam o estado do
+CIC e podem se recusar a bootar com o lockout desligado. Cartuchos que passam no
+handshake continuam com o lockout ativo, então o mod não os afeta; isso só
+importa se o CIC foi desligado por outro motivo.
 
 ---
 
-## 🧪 Technical notes
+## 🧪 Notas técnicas
 
-### The boot path is v1.5.0, on purpose
+### O caminho de boot é o da v1.5.0, de propósito
 
-`reset.cpp` is a **line-by-line port of v1.5.0**: at boot it drives `D4` **HIGH**
-for 500 ms and then releases the pin (high-Z). It does **not** pull `/RESET` low.
+O `reset.cpp` é **cópia linha por linha da v1.5.0**: no boot ele dirige o `D4`
+**HIGH** por 500 ms e depois solta o pino (high-Z). Ele **não** puxa `/RESET`
+para LOW.
 
-During v2.0.0 development the reset helper was "improved" into a real 10 ms LOW
-pulse. The console stopped booting on the test unit. The community lesson is
-simple: **on this mod the reset shape is part of the boot contract** — the SNES
-CIC handshake happens right after power-on, and poking `/RESET` while it is
-negotiating can leave the CIC holding the console in reset. So the proven
-sequence stayed.
+Durante o desenvolvimento da v2.0.0 a rotina de reset foi "melhorada" para um
+pulso LOW real de 10 ms. O console parou de ligar na unidade de teste. A lição é
+simples: **neste mod o formato do reset faz parte do contrato de boot** — o
+handshake do CIC acontece logo após a energização, e cutucar `/RESET` durante a
+negociação pode deixar o CIC segurando o console em reset. A sequência
+comprovada ficou.
 
-Timing is matched too: v1.5.0 samples the CIC handshake **1700 ms** after the
-reset line returns (1500 ms `delay` + 200 ms spent inside `redLedOn()`), and
-v2.0.0 uses `CIC_CHECK_DELAY_MS = 1700` for the same sample point.
+O timing também casa: a v1.5.0 amostra o handshake do CIC **1700 ms** depois de a
+linha de reset voltar (1500 ms de `delay` + 200 ms gastos dentro do
+`redLedOn()`), e a v2.0.0 usa `CIC_CHECK_DELAY_MS = 1700` para o mesmo instante.
 
-### How the CIC check works
+### Como a checagem do CIC funciona
 
-`D5` reads CIC pin 1 through the internal pull-up. After the settle time the
-line is sampled once:
+O `D5` lê o pino 1 do CIC pelo pull-up interno. Depois do tempo de acomodação a
+linha é amostrada uma vez:
 
-- at `CIC_DATA_RUNNING_LEVEL` (`LOW`) → the handshake succeeded, keep the
-  lockout enabled (red);
-- otherwise → disable the lockout (`D8` LOW), reset the console, show green.
+- em `CIC_DATA_RUNNING_LEVEL` (`LOW`) → o handshake deu certo, lockout continua
+  ativo (vermelho);
+- caso contrário → desliga o lockout (`D8` LOW), reseta o console, mostra verde.
 
-The level is empirical (it is what v1.5.0 uses on real hardware). If your board
-behaves backwards, flip `CIC_DATA_RUNNING_LEVEL` in `pins.h`.
+O nível é empírico (é o que a v1.5.0 usa em hardware real). Se a sua placa se
+comportar ao contrário, inverta `CIC_DATA_RUNNING_LEVEL` no `pins.h`.
 
 ### EEPROM
 
-Combos live at **address 64** in v2.0.0, with magic + version + checksum + range
-and duplicate validation. v1.5.0 uses address 0, so:
+Os combos ficam no **endereço 64** na v2.0.0, com validação de magic + versão +
+checksum + faixa + duplicados. A v1.5.0 usa o endereço 0, então:
 
-- flashing v2.0.0 does not destroy the v1.5.0 combos, and
-- flashing v1.5.0 back restores them untouched (no garbage, no phantom combos).
+- gravar a v2.0.0 não destrói os combos da v1.5.0, e
+- gravar a v1.5.0 de volta os restaura intactos (sem lixo, sem combos fantasmas).
 
-### Controller pins
+### Pinos do controle
 
-v1.x defined `latch 19 / clock 20 / Sdata 21`, which on a Nano are **A5/A6/A7**,
-while `PINC` bit reads used **PC0/PC1/PC2** (`A0/A1/A2`). It worked only because
-all six pins default to inputs after reset. v2.0.0 configures the real
-`A0/A1/A2` as plain inputs and reads `PINC` directly inside one clock phase.
+A v1.x definia `latch 19 / clock 20 / Sdata 21`, que no Nano são **A5/A6/A7**,
+enquanto a leitura de `PINC` usava **PC0/PC1/PC2** (`A0/A1/A2`). Só funcionava
+porque os seis pinos são entradas após o reset. A v2.0.0 configura os
+`A0/A1/A2` reais como entradas simples e lê `PINC` direto dentro de uma fase de
+clock.
 
 ---
 
-## 🩺 Troubleshooting
+## 🩺 Solução de problemas
 
-| Symptom | Check |
+| Sintoma | Verifique |
 |---|---|
-| Console dead (power LED on, no video) | Is the Arduino powered? An unpowered Nano clamps `/RESET` through its protection diodes. Reconnect the 5 V (or remove the `D4` wire to confirm). |
-| RGB build: no green pulse at boot | The Nano did not reach the end of `setup()`. Check the flash and the 5 V. |
-| Green LED steady, console resets in a loop | The CIC handshake is being read as failed. Confirm `D8` → CIC pin 4 is really lifted. |
-| Blue never lights | The only "always visible" blue is the EEPROM blink on first boot and the config mode — blue is feedback, not a status light. |
-| Combos do nothing | `A0/A1/A2` wired? Did you flash a `-nocontroller` build? |
-| In-game reset also hits the flashcart | You are using v1.x combos (`Start+L/R`). Restore the defaults (`L+R+A+B` at power-on). |
-| `avrdude: Device signature = 00 00 00` / `FF FF FF` | ISP wiring or power, not the hex. With **Arduino as ISP**: `D10` → target `RESET` (ICSP pin 5, **not** the Uno's own ICSP pin 5), `D11/D12/D13`, `GND`, one 5 V source only, and a 10 µF cap between `RESET` and `GND` **on the programmer**. Never use `-F`. |
+| Console morto (LED de power aceso, sem vídeo) | O Arduino está alimentado? Um Nano sem 5 V grampeia o `/RESET` pelos diodos de proteção. Reconecte os 5 V (ou solte o fio do `D4` para confirmar). |
+| Build RGB: sem piscada verde no boot | O Nano não chegou ao fim do `setup()`. Confira a gravação e os 5 V. |
+| Verde fixo e o console resetando em loop | O handshake está sendo lido como falha. Confirme que o `D8` → pino 4 do CIC está realmente levantado. |
+| Azul nunca acende | O azul é feedback, não status: só aparece na inicialização da EEPROM (primeiro boot) e no modo de configuração. |
+| Combos não fazem nada | `A0/A1/A2` ligados? Você gravou um build `-nocontroller`? |
+| O reset em jogo também mexe no flashcart | Você está com os combos da v1.x (`Start+L/R`). Restaure os padrões (`L+R+A+B` ao ligar). |
+| `avrdude: Device signature = 00 00 00` / `FF FF FF` | Fiação ou energia do ISP, não o hex. Com **Arduino as ISP**: `D10` → `RESET` do alvo (pino 5 do ICSP, **não** o pino 5 do ICSP do Uno), `D11/D12/D13`, `GND`, uma única fonte de 5 V e um capacitor de 10 µF entre `RESET` e `GND` **no programador**. Nunca use `-F`. |
 
 ---
 
 ## 📝 Changelog
 
 ### v2.0.0
-- **Boot path is a line-by-line port of v1.5.0** — `setup()` order, reset helper
-  (`D4` HIGH 500 ms → release), `D5` pull-up, plain-input controller pins and the
-  1700 ms CIC sample point. `reset.cpp` is verbatim v1.5.0.
-- **Optional single RGB LED** (`-DHAS_RGB_LED=1`): red/green keep the CIC status,
-  blue adds feedback. `D7` = red, `D6` = blue, `D3` = green, so v1.5.0 can be
-  flashed back without rewiring.
-- **Green "alive" pulse** on `D3` at the end of `setup()` (RGB build only).
-- **Controller pins fixed**: real `A0/A1/A2` instead of `A5/A6/A7`.
-- **Bus timeouts** in `readControllerFrame()` — no more hanging on a missing pad.
-- **~400 ms combo hold** before acting.
-- **EEPROM validation** (magic/version/checksum/range/duplicates) at address 64,
-  independent from v1.5.0's address 0.
-- **New default combos** (`L+R+X+Y`, `L+R+A+B`) that avoid SD2SNES/FXPak shortcuts.
-- **Config/factory-reset gestures** moved from `Start`/`Select` to the reset
-  combos, so they no longer launch a game or open the cheat list on a flashcart.
-- **Non-blocking LED blink** during configuration; the loop is frame-paced.
-- **`CicGndPin` renamed** to `PIN_CIC_DATA` (it is CIC pin 1, not ground) and the
-  CIC state is kept in a variable instead of read back from an output.
-- **Single `pins.h`** with every pin, flag and timing.
-- **Documentation**: this README, the wiring tables, the boot legend and
-  [README.pt-BR.md](README.pt-BR.md).
+- **Caminho de boot é cópia linha por linha da v1.5.0** — ordem do `setup()`,
+  rotina de reset (`D4` HIGH 500 ms → solta), pull-up do `D5`, pinos do controle
+  como entradas simples e amostragem do CIC em 1700 ms. `reset.cpp` é verbatim.
+- **LED RGB único opcional** (`-DHAS_RGB_LED=1`): vermelho/verde mantêm o status
+  do CIC, azul faz o feedback. `D7` = vermelho, `D6` = azul, `D3` = verde, para
+  regravar a v1.5.0 sem ressoldar.
+- **Piscada verde de "vivo"** no `D3` no fim do `setup()` (só no build RGB).
+- **Pinos do controle corrigidos**: `A0/A1/A2` reais em vez de `A5/A6/A7`.
+- **Timeouts no barramento** em `readControllerFrame()`.
+- **Hold de ~400 ms** antes de disparar o combo.
+- **EEPROM validada** (magic/versão/checksum/faixa/duplicados) no endereço 64,
+  independente do endereço 0 da v1.5.0.
+- **Novos combos padrão** (`L+R+X+Y`, `L+R+A+B`) que evitam atalhos do
+  SD2SNES/FXPak.
+- **Gestos de configuração/factory reset** saíram de `Start`/`Select` para os
+  combos de reset, então não abrem mais jogo nem lista de cheats no flashcart.
+- **Blink não bloqueante** durante a configuração; o loop é paced por frame.
+- **`CicGndPin` renomeado** para `PIN_CIC_DATA` (é o pino 1 do CIC, não terra) e
+  o estado do CIC fica numa variável em vez de ser lido de uma saída.
+- **`pins.h` único** com todos os pinos, flags e timings.
+- **Documentação**: este README, as tabelas de fiação, a legenda do boot e a
+  versão em inglês.
 
-### v1.5.0 and earlier
-See the original repository: [lucaslealdev/sicksnes](https://github.com/lucaslealdev/sicksnes).
+### v1.5.0 e anteriores
+Veja o repositório original: [lucaslealdev/sicksnes](https://github.com/lucaslealdev/sicksnes).
 
 ---
 
-## ✨ Credits
+## ✨ Créditos
 
-- **[@lucaslealdev](https://github.com/lucaslealdev)** — original project,
-  hardware mod, v1.x firmware, LED scheme, documentation, videos.
+- **[@lucaslealdev](https://github.com/lucaslealdev)** — projeto original, mod de
+  hardware, firmware v1.x, esquema de LEDs, documentação e vídeos.
   ⭐ [github.com/lucaslealdev/sicksnes](https://github.com/lucaslealdev/sicksnes)
 - **[JeffWDH/NES-In-Game-Reset](https://github.com/JeffWDH/NES-In-Game-Reset)** —
-  the reset approach that inspired this mod.
-- [Pixel que Byte](https://www.youtube.com/@PixelqueByte) — project videos.
-- v2.0.0 maintenance (RGB LED, boot-path restoration, robustness fixes, docs):
-  this fork.
+  a abordagem de reset que inspirou o mod.
+- [Pixel que Byte](https://www.youtube.com/@PixelqueByte) — vídeos do projeto.
+- Manutenção da v2.0.0 (LED RGB, restauração do caminho de boot, correções de
+  robustez, documentação): este fork.
 
-The mod is provided as-is, with no guarantees. Modify and distribute at your own
-risk — and under **GPL-3.0**, like the original.
+O mod é fornecido como está, sem garantias. Modifique e distribua por sua conta e
+risco — e sob **GPL-3.0**, como o original.
