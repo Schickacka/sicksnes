@@ -44,7 +44,7 @@ License: **GPL-3.0**, inherited from upstream. See [LICENSE](LICENSE).
 7. [SD2SNES / FXPak compatibility](#-sd2snes--fxpak-compatibility)
 8. [Installing without the controller wires](#-installing-without-the-controller-wires)
 9. [Flashing](#-flashing)
-10. [Building from source](#️-building-from-source)
+10. [Configuring and building](#️-configuring-and-building)
 11. [Compatibility](#-compatibility)
 12. [Technical notes](#-technical-notes)
 13. [Troubleshooting](#-troubleshooting)
@@ -64,6 +64,7 @@ License: **GPL-3.0**, inherited from upstream. See [LICENSE](LICENSE).
 | 💾 **Validated EEPROM at a new address** | Magic + version + checksum + range checks, stored at **address 64** so v1.5.0's combos (address 0) survive a round trip. |
 | 🕹️ **New default combos** | `L+R+X+Y` / `L+R+A+B` — they do not collide with any SD2SNES/FXPak shortcut. |
 | 💡 **Green "alive" pulse** | On the RGB build, one 80 ms green pulse on `D3` at the end of `setup()` — a free diagnostic channel that v1.5.0 never touches. |
+| 🎛️ **One config file** | `sicksnes/config.h`: uncomment the line for your wiring (RGB LED, no controller, debug) and compile. No code edits, no flags to remember. |
 | 📖 **Docs** | This README, wiring tables, boot legend and the Portuguese version ([README.md](README.md)). |
 
 ---
@@ -353,23 +354,46 @@ no video). It is not damage — restore the Arduino's 5 V and it boots again.
 
 ---
 
-## 🛠️ Building from source
+## 🛠️ Configuring and building
+
+Everything is configured in **one file: `sicksnes/config.h`**. No flags to
+memorise, no code to edit — just uncomment the line for your wiring, the way
+the classic Arduino mods work.
+
+```cpp
+// ---------------------------------------------------------------------------
+//  1) LED
+// ---------------------------------------------------------------------------
+//  PADRAO: dois LEDs discretos (anodo em D6/D7, catodo chaveado em D9/D10).
+//  Se a sua montagem e essa, nao descomente nada.
+//
+//  LED RGB unico de CATODO comum (a perna comum vai no GND):
+//#define HAS_RGB_LED 1
+//
+//  LED RGB unico de ANODO comum (a perna comum vai no +5 V):
+//  descomente as DUAS linhas abaixo.
+//#define HAS_RGB_LED 1
+//#define RGB_COMMON_ANODE 1
+```
+
+### With the Arduino IDE (easy way)
+
+1. Open `sicksnes/sicksnes.ino`.
+2. Click the **`config.h`** tab (next to the `.ino`).
+3. Delete the leading `//` from the lines that match your hardware.
+4. Compile and upload as usual.
+
+Changed nothing? Then you are building the default wiring: two LEDs on
+`D6`/`D7` plus the three controller wires on `A0`/`A1`/`A2`.
+
+### From the command line (arduino-cli)
 
 ```bash
 arduino-cli compile --fqbn arduino:avr:nano ./sicksnes
 ```
 
-Build flags (all optional, defined in `sicksnes/pins.h` or passed with
-`--build-property "compiler.cpp.extra_flags=-D..."`):
-
-| Flag | Default | Effect |
-|---|---|---|
-| `HAS_CONTROLLER` | `1` | `0` compiles the controller/combos out (no `A0/A1/A2`). |
-| `HAS_RGB_LED` | `0` | `1` uses one RGB LED instead of two discrete LEDs. |
-| `RGB_COMMON_ANODE` | `0` | `1` for a common-anode RGB LED (common leg to +5 V). |
-| `RGB_GREEN_ON_D6` | off | Swaps green/blue: green on `D6`, blue on `D3`. |
-
-Examples:
+The very same options also work as build flags, without editing any file —
+handy for scripts and CI:
 
 ```bash
 # RGB LED + controller
@@ -380,6 +404,35 @@ arduino-cli compile --fqbn arduino:avr:nano \
 arduino-cli compile --fqbn arduino:avr:nano \
   --build-property "compiler.cpp.extra_flags=-DHAS_CONTROLLER=0 -DHAS_RGB_LED=1" ./sicksnes
 ```
+
+### The options
+
+| Option (in `config.h` or `-D`) | Default | Effect |
+|---|---|---|
+| `HAS_CONTROLLER` | `1` | `0` compiles the controller/combos out (no `A0/A1/A2`). |
+| `HAS_RGB_LED` | `0` | `1` uses one RGB LED instead of two discrete LEDs. |
+| `RGB_COMMON_ANODE` | `0` | `1` for a common-anode RGB LED (common leg to +5 V). |
+| `RGB_GREEN_ON_D6` | off | Swaps green/blue: green on `D6`, blue on `D3`. |
+| `SICKNES_DEBUG` | `0` | `1` turns on the Serial Monitor (9600) with the compiled config and the combos it sees. |
+
+> `RGB_GREEN_ON_D6` works by **presence of the line** (`#define RGB_GREEN_ON_D6`,
+> no value). To turn it off, delete the line — do not use `0`.
+>
+> Enabling an RGB-only option (`RGB_COMMON_ANODE` or `RGB_GREEN_ON_D6`) without
+> `HAS_RGB_LED 1` stops the build with an explanatory message instead of
+> producing the wrong firmware.
+
+### Which combination matches each prebuilt image?
+
+| `HAS_RGB_LED` | `HAS_CONTROLLER` | Same as |
+|---|---|---|
+| `0` | `1` | `sicksnes-v2.0.0-2led-controller.hex` |
+| `0` | `0` | `sicksnes-v2.0.0-2led-nocontroller.hex` |
+| `1` | `1` | `sicksnes-v2.0.0-rgb-controller.hex` |
+| `1` | `0` | `sicksnes-v2.0.0-rgb-nocontroller.hex` |
+
+Verified: editing `config.h` and compiling produces **exactly** the same `.hex`
+as the command-line flags — the two ways are equivalent.
 
 ---
 
@@ -483,6 +536,17 @@ all six pins default to inputs after reset. v2.0.0 configures the real
 ---
 
 ## 📝 Changelog
+
+### Unreleased
+- **`sicksnes/config.h`**: a single file to pick your wiring. Instead of passing
+  `-D` flags, you uncomment the line for your install in `config.h` and compile
+  from the Arduino IDE. The flags still work and produce **exactly** the same
+  binary (verified byte by byte on all four variants).
+- **`SICKNES_DEBUG`**: optional debug output from `config.h`, with a summary of
+  the compiled configuration and the combos seen on the Serial Monitor. Off by
+  default, so the default binary does not change.
+- **Config sanity check**: enabling `RGB_COMMON_ANODE` or `RGB_GREEN_ON_D6`
+  without `HAS_RGB_LED 1` now stops the build with a clear message.
 
 ### v2.0.0
 - **Boot path is a line-by-line port of v1.5.0** — `setup()` order, reset helper

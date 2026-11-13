@@ -44,7 +44,7 @@ Licença: **GPL-3.0**, herdada do projeto original. Veja [LICENSE](LICENSE).
 7. [Compatibilidade com SD2SNES / FXPak](#-compatibilidade-com-sd2snes--fxpak)
 8. [Instalar sem os fios do controle](#-instalar-sem-os-fios-do-controle)
 9. [Gravação](#-gravação)
-10. [Compilar do código](#️-compilar-do-código)
+10. [Configurar e compilar](#️-configurar-e-compilar)
 11. [Notas de compatibilidade](#-notas-de-compatibilidade)
 12. [Notas técnicas](#-notas-técnicas)
 13. [Solução de problemas](#-solução-de-problemas)
@@ -64,6 +64,7 @@ Licença: **GPL-3.0**, herdada do projeto original. Veja [LICENSE](LICENSE).
 | 💾 **EEPROM validada e em endereço novo** | Magic + versão + checksum + faixa, gravada no **endereço 64** — os combos da v1.5.0 (endereço 0) sobrevivem à ida e à volta. |
 | 🕹️ **Novos combos padrão** | `L+R+X+Y` / `L+R+A+B` — não colidem com nenhum atalho do SD2SNES/FXPak. |
 | 💡 **Piscada verde de "vivo"** | No build RGB, um pulso verde de 80 ms no `D3` no fim do `setup()` — canal de diagnóstico que a v1.5.0 não usa. |
+| 🎛️ **Um único arquivo de configuração** | `sicksnes/config.h`: descomente a linha da sua montagem (LED RGB, sem controle, depuração) e compile. Sem editar código, sem decorar flags. |
 | 📖 **Documentação** | Este README, tabelas de fiação, legenda do boot e a versão em inglês ([README.en.md](README.en.md)). |
 
 ---
@@ -355,23 +356,46 @@ ele volta a ligar.
 
 ---
 
-## 🛠️ Compilar do código
+## 🛠️ Configurar e compilar
+
+Toda a configuração fica em **um único arquivo: `sicksnes/config.h`**. Você não
+precisa decorar flags, nem editar código: é só descomentar a linha da sua
+montagem, como nos mods que você já conhece.
+
+```cpp
+// ---------------------------------------------------------------------------
+//  1) LED
+// ---------------------------------------------------------------------------
+//  PADRAO: dois LEDs discretos (anodo em D6/D7, catodo chaveado em D9/D10).
+//  Se a sua montagem e essa, nao descomente nada.
+//
+//  LED RGB unico de CATODO comum (a perna comum vai no GND):
+//#define HAS_RGB_LED 1
+//
+//  LED RGB unico de ANODO comum (a perna comum vai no +5 V):
+//  descomente as DUAS linhas abaixo.
+//#define HAS_RGB_LED 1
+//#define RGB_COMMON_ANODE 1
+```
+
+### Pelo Arduino IDE (o jeito fácil)
+
+1. Abra `sicksnes/sicksnes.ino`.
+2. Clique na aba **`config.h`** (fica ao lado do `.ino`).
+3. Apague o `//` do começo das linhas que correspondem à sua montagem.
+4. Compile e envie normalmente.
+
+Não mexeu em nada? Então você está compilando a montagem padrão: dois LEDs em
+`D6`/`D7` + os três fios do controle em `A0`/`A1`/`A2`.
+
+### Pela linha de comando (arduino-cli)
 
 ```bash
 arduino-cli compile --fqbn arduino:avr:nano ./sicksnes
 ```
 
-Flags de build (todas opcionais, definidas em `sicksnes/pins.h` ou passadas com
-`--build-property "compiler.cpp.extra_flags=-D..."`):
-
-| Flag | Padrão | Efeito |
-|---|---|---|
-| `HAS_CONTROLLER` | `1` | `0` remove o controle/combos do build (sem `A0/A1/A2`). |
-| `HAS_RGB_LED` | `0` | `1` usa um LED RGB em vez de dois LEDs. |
-| `RGB_COMMON_ANODE` | `0` | `1` para LED RGB de ânodo comum (perna comum em +5 V). |
-| `RGB_GREEN_ON_D6` | desligado | Troca verde/azul: verde no `D6`, azul no `D3`. |
-
-Exemplos:
+As mesmas opções do `config.h` também funcionam como flags, sem editar arquivo
+nenhum — útil para script ou CI:
 
 ```bash
 # LED RGB + controle
@@ -382,6 +406,35 @@ arduino-cli compile --fqbn arduino:avr:nano \
 arduino-cli compile --fqbn arduino:avr:nano \
   --build-property "compiler.cpp.extra_flags=-DHAS_CONTROLLER=0 -DHAS_RGB_LED=1" ./sicksnes
 ```
+
+### As opções
+
+| Opção (em `config.h` ou `-D`) | Padrão | Efeito |
+|---|---|---|
+| `HAS_CONTROLLER` | `1` | `0` remove o controle/combos do build (sem `A0/A1/A2`). |
+| `HAS_RGB_LED` | `0` | `1` usa um LED RGB em vez de dois LEDs. |
+| `RGB_COMMON_ANODE` | `0` | `1` para LED RGB de ânodo comum (perna comum em +5 V). |
+| `RGB_GREEN_ON_D6` | desligado | Troca verde/azul: verde no `D6`, azul no `D3`. |
+| `SICKNES_DEBUG` | `0` | `1` liga o Monitor Serial (9600) com o resumo da configuração e os combos detectados. |
+
+> `RGB_GREEN_ON_D6` vale pela **presença da linha** (`#define RGB_GREEN_ON_D6`,
+> sem valor). Para desligar, apague a linha — não use `0`.
+>
+> Se você ligar uma opção que só existe no build RGB (`RGB_COMMON_ANODE` ou
+> `RGB_GREEN_ON_D6`) sem `HAS_RGB_LED 1`, a compilação para com uma mensagem
+> explicando o que faltou, em vez de gerar um firmware errado.
+
+### Qual combinação gera cada imagem pronta?
+
+| `HAS_RGB_LED` | `HAS_CONTROLLER` | Equivale a |
+|---|---|---|
+| `0` | `1` | `sicksnes-v2.0.0-2led-controller.hex` |
+| `0` | `0` | `sicksnes-v2.0.0-2led-nocontroller.hex` |
+| `1` | `1` | `sicksnes-v2.0.0-rgb-controller.hex` |
+| `1` | `0` | `sicksnes-v2.0.0-rgb-nocontroller.hex` |
+
+Testado: editar o `config.h` e compilar gera **exatamente** o mesmo `.hex` que
+as flags de linha de comando — as duas formas são equivalentes.
 
 ---
 
@@ -487,6 +540,17 @@ clock.
 ---
 
 ## 📝 Changelog
+
+### Não lançado
+- **`sicksnes/config.h`**: um único arquivo para escolher a montagem. Em vez de
+  passar `-D` na linha de comando, você descomenta a linha da sua instalação no
+  `config.h` e compila no Arduino IDE. As flags continuam funcionando e geram
+  **exatamente** o mesmo binário (verificado byte a byte nas quatro variantes).
+- **`SICKNES_DEBUG`**: depuração opcional pelo `config.h`, com resumo da
+  configuração compilada no Monitor Serial. Desligada por padrão — o binário
+  padrão não muda.
+- **Checagem de configuração**: ligar `RGB_COMMON_ANODE` ou `RGB_GREEN_ON_D6`
+  sem `HAS_RGB_LED 1` agora para a compilação com uma mensagem clara.
 
 ### v2.0.0
 - **Caminho de boot é cópia linha por linha da v1.5.0** — ordem do `setup()`,

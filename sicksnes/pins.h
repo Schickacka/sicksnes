@@ -3,6 +3,10 @@
 
 #include <Arduino.h>
 
+// User-editable options (LED type, controller wires, debug). The defaults
+// below only apply when config.h leaves them commented out.
+#include "config.h"
+
 // ---------------------------------------------------------------------------
 // Feature flags
 // ---------------------------------------------------------------------------
@@ -82,5 +86,17 @@
 // cathode there), so the sample happens 1700 ms after the reset line returns.
 #define CIC_CHECK_DELAY_MS   1700
 #define BOOT_RESET_MS         500  // reset held while the Arduino boots
+
+// ---------------------------------------------------------------------------
+// Sanity checks for config.h
+// ---------------------------------------------------------------------------
+// Catches the classic mistake of enabling an RGB-only option while the 2-LED
+// build is still selected, instead of silently compiling the wrong thing.
+#if defined(RGB_GREEN_ON_D6) && !HAS_RGB_LED
+#error "config.h: RGB_GREEN_ON_D6 so vale junto com HAS_RGB_LED 1."
+#endif
+#if RGB_COMMON_ANODE && !HAS_RGB_LED
+#error "config.h: RGB_COMMON_ANODE so vale junto com HAS_RGB_LED 1."
+#endif
 
 #endif

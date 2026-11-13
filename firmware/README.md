@@ -32,6 +32,10 @@ sha256sum sicksnes-v2.0.0-rgb-controller.hex
 
 ## Como essas imagens foram geradas
 
+As quatro combinações saem do mesmo código, mudando só as opções de build. No
+Arduino IDE, o equivalente é descomentar as linhas no `sicksnes/config.h`
+(veja ["Configurar e compilar"](../README.md#️-configurar-e-compilar)):
+
 ```bash
 arduino-cli compile --fqbn arduino:avr:nano \
   --output-dir out ./sicksnes

@@ -22,6 +22,10 @@
 //  - EEPROM is validated and stored at a separate address (v1.5.0 combos and
 //    the v1.5.0 image keep working when you flash back and forth)
 //  - default combos no longer collide with SD2SNES/FXPak shortcuts
+//
+// >>> CONFIGURACAO: nao edite este arquivo para trocar de montagem.
+//     Abra a aba "config.h" e descomente as linhas da sua instalacao
+//     (LED RGB, sem controle, depuracao serial). <<<
 
 #include <Arduino.h>
 
@@ -33,7 +37,7 @@
 #include "led.h"
 #include "controller.h"
 
-bool debug = false;
+bool debug = SICKNES_DEBUG;
 
 #if HAS_CONTROLLER
 enum Mode : uint8_t {
@@ -194,6 +198,29 @@ static void handleInGame() {
 //   5. 1700 ms settle (= v1.5.0), then the CIC handshake is sampled
 void setup() {
     if (debug) Serial.begin(9600);
+#if SICKNES_DEBUG
+    // Banner with the compiled options (only when debug is enabled in config.h).
+    Serial.println(F("sick snes v2.0.0 - config:"));
+  #if HAS_CONTROLLER
+    Serial.println(F("  controle: A0/A1/A2 ligados"));
+  #else
+    Serial.println(F("  controle: DESLIGADO (sem reset em jogo)"));
+  #endif
+  #if HAS_RGB_LED
+    #if RGB_COMMON_ANODE
+    Serial.println(F("  LED: RGB unico, anodo comum"));
+    #else
+    Serial.println(F("  LED: RGB unico, catodo comum"));
+    #endif
+    #if defined(RGB_GREEN_ON_D6)
+    Serial.println(F("  canais: verde=D6, azul=D3"));
+    #else
+    Serial.println(F("  canais: vermelho=D7, azul=D6, verde=D3"));
+    #endif
+  #else
+    Serial.println(F("  LED: dois LEDs (D6/D7 + D9/D10)"));
+  #endif
+#endif
 
     // 1. Lockout chip enabled by default.
     setCicEnabled(true);
