@@ -2,8 +2,7 @@
 #define CIC_H
 
 void handleCICUnlockIfNeeded();
-void toggleCIC();
-void disableGroundPin();
+void setCicEnabled(bool enabled);
 bool isCicOn();
 
 #endif

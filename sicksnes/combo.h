@@ -3,32 +3,25 @@
 
 #include <Arduino.h>
 #include <EEPROM.h>
+#include "buttons.h"
 
-#define buttonB 0
-#define buttonY 1
-#define buttonSelect 2
-#define buttonStart 3
-#define buttonUp 4
-#define buttonDown 5
-#define buttonLeft 6
-#define buttonRight 7
-#define buttonA 8
-#define buttonX 9
-#define buttonL 10
-#define buttonR 11
+#define COMBO_LEN 4
 
 struct ButtonCombos {
-    int resetCombo[4];
-    int longResetCombo[4];
-    bool initialized;
+    uint16_t magic;
+    uint16_t checksum;
+    uint8_t  version;
+    uint8_t  resetCombo[COMBO_LEN];
+    uint8_t  longResetCombo[COMBO_LEN];
 };
 
-extern const int EEPROM_ADDR;
 extern ButtonCombos combos;
 
+// Returns true when the stored data was invalid and the defaults were written.
+bool loadCombos();
 void saveDefaultCombos();
-void loadCombos();
-void saveNewResetCombo(int* newCombo, size_t size);
-void saveNewLongResetCombo(int* newCombo, size_t size);
+bool saveNewResetCombo(const uint8_t* newCombo, size_t size);
+bool saveNewLongResetCombo(const uint8_t* newCombo, size_t size);
+bool comboValid(const uint8_t* combo, size_t size);
 
 #endif

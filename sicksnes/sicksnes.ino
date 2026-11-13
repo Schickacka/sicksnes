@@ -4,21 +4,29 @@
 //  ___ _  ___| | __   ___ ____   ___  ___          //
 // / __| |/ __| |/ /  / __| '_ \ / _ \/ __|         //
 // \__ \ | (__|   <   \__ \ | | |  __/\__ \         //
-// |___/_|\___|_|\_\  \___/_| |_|\___||___/  v1.5.0 //
+// |___/_|\___|_|\_\  \___/_| |_|\___||___/  v2.0.0 //
 //////////////////////////////////////////////////////
 //
-// Made by @lucaslealdev 🙋‍♂️
-// 2025 📅
-// let's mod these games 🎮
+// Made by @lucaslealdev -- original project, hardware mod and the whole v1.x
+// firmware: https://github.com/lucaslealdev/sicksnes
 //
-// The _sick snes_ allows automatic lockout chip toggle and in-game reset.
-// If the cart does not pass the CIC check,
-// this mod turns the CIC off and reset the console automatically.
-// https://github.com/lucaslealdev/sicksnes
+// The _sick snes_ provides automatic lockout chip toggling and in-game reset.
+// If the cartridge does not pass the CIC check, the mod disables the lockout
+// chip and resets the console automatically.
+//
+// v2.0.0 is a maintenance release of that work (same GPL-3.0 license):
+//  - reset + CIC boot sequence is byte-identical to v1.5.0 (proven to boot)
+//  - optional single RGB LED (D7 = red, D6 = blue, D3 = green)
+//  - controller pins are configured correctly (A0/A1/A2)
+//  - bus reads have timeouts; combos must be held before firing
+//  - EEPROM is validated and stored at a separate address (v1.5.0 combos and
+//    the v1.5.0 image keep working when you flash back and forth)
+//  - default combos no longer collide with SD2SNES/FXPak shortcuts
 
 #include <Arduino.h>
-#include <EEPROM.h>
 
+#include "pins.h"
+#include "buttons.h"
 #include "combo.h"
 #include "cic.h"
 #include "reset.h"
@@ -27,116 +35,221 @@
 
 bool debug = false;
 
-// Pinos
-#define resetPin 4
-#define CicGndPin 5
-#define greenPin 6
-#define redPin 7
-#define greenGNDPin 9
-#define redGNDPin 10
-#define cicPin 8
-#define ledPin 13
-#define latch 19 // A0
-#define clock 20 // A1
-#define Sdata 21 // A2
-constexpr uint8_t LATCH_BIT = 0;
-constexpr uint8_t CLOCK_BIT = 1;
-constexpr uint8_t SDATA_BIT = 2;
+#if HAS_CONTROLLER
+enum Mode : uint8_t {
+    MODE_NORMAL = 0,
+    MODE_CONFIG_QUICK,
+    MODE_CONFIG_LONG
+};
 
-bool alreadyCheckedFactoryReset = false;
-bool alreadyCheckedConfiguration = false;
-int status = 0;
+static Mode mode = MODE_NORMAL;
+static bool bootGesturesDone = false;
+static bool waitingRelease = true;
+static bool fired = false;
+static uint8_t heldKind = 0;
+static uint32_t heldSince = 0;
+static uint32_t lastBlink = 0;
+static bool blinkOn = false;
 
+static void startConfiguration() {
+    mode = MODE_CONFIG_QUICK;
+    waitingRelease = true;
+    blinkOn = true;
+    lastBlink = millis();
+    blueOn();
+    if (debug) Serial.println(F("Config: press the quick-reset combo"));
+}
+
+// Short feedback on the blue channel (or on the status LED in the 2-LED build).
+static void blueFeedback(uint8_t times) {
+    blueBlink(times, 90);
+    lastBlink = millis();
+    blinkOn = false;
+}
+
+static void handleBootGestures() {
+    if (countPressed() == COMBO_LEN) {
+        uint8_t pressed[COMBO_LEN];
+        getPressedCombo(pressed, COMBO_LEN);
+
+        if (isSameCombo(pressed, combos.resetCombo, COMBO_LEN)) {
+            startConfiguration();
+            bootGesturesDone = true;
+            return;
+        }
+        if (isSameCombo(pressed, combos.longResetCombo, COMBO_LEN)) {
+            if (debug) Serial.println(F("Factory reset: restoring default combos"));
+            saveDefaultCombos();
+            blinkActiveLed();
+            blinkActiveLed();
+            blinkActiveLed();
+            bootGesturesDone = true;
+            return;
+        }
+    }
+
+    if (millis() > BOOT_WINDOW_MS) bootGesturesDone = true;
+}
+
+static void handleConfiguration() {
+    // Non-blocking blink while we wait for the user.
+    if (millis() - lastBlink >= 250) {
+        lastBlink = millis();
+        blinkOn = !blinkOn;
+        if (blinkOn) {
+            blueOn();
+        } else {
+            blueOff();
+        }
+    }
+
+    // Ignore the combo that started the mode, and require a release between
+    // the two steps.
+    if (waitingRelease) {
+        if (countPressed() == 0) waitingRelease = false;
+        return;
+    }
+
+    if (countPressed() != COMBO_LEN) return;
+
+    uint8_t pressed[COMBO_LEN];
+    getPressedCombo(pressed, COMBO_LEN);
+
+    if (mode == MODE_CONFIG_QUICK) {
+        if (saveNewResetCombo(pressed, COMBO_LEN)) {
+            mode = MODE_CONFIG_LONG;
+            waitingRelease = true;
+            if (debug) Serial.println(F("Quick-reset combo stored"));
+            blueFeedback(2);
+        } else {
+            if (debug) Serial.println(F("Rejected: four different buttons, not the long-reset combo"));
+            waitingRelease = true;
+            blueFeedback(3);
+        }
+        return;
+    }
+
+    if (saveNewLongResetCombo(pressed, COMBO_LEN)) {
+        mode = MODE_NORMAL;
+        waitingRelease = true;
+        blinkOn = true;
+        if (debug) Serial.println(F("Long-reset combo stored"));
+        blueFeedback(2);
+        updateLED();
+    } else {
+        if (debug) Serial.println(F("Rejected: four different buttons, not the quick-reset combo"));
+        waitingRelease = true;
+        blueFeedback(3);
+    }
+}
+
+static void handleInGame() {
+    if (countPressed() == 0) {
+        fired = false;
+        heldKind = 0;
+        return;
+    }
+    if (fired) return;
+
+    uint8_t kind = 0;
+    if (isComboPressed(combos.resetCombo, COMBO_LEN)) {
+        kind = 1;
+    } else if (isComboPressed(combos.longResetCombo, COMBO_LEN)) {
+        kind = 2;
+    } else {
+        heldKind = 0;
+        return;
+    }
+
+    if (kind != heldKind) {
+        heldKind = kind;
+        heldSince = millis();
+        return;
+    }
+    if (millis() - heldSince < COMBO_HOLD_MS) return;
+
+    fired = true;
+#if HAS_RGB_LED
+    blueOn();
+#endif
+    if (kind == 1) {
+        if (debug) Serial.println(F("Soft reset"));
+        triggerReset();
+    } else {
+        if (debug) Serial.println(F("Long reset"));
+        triggerLongReset();
+    }
+#if HAS_RGB_LED
+    blueOff();
+#endif
+}
+#endif  // HAS_CONTROLLER
+
+// The boot sequence below is a line-by-line port of v1.5.0's setup(). It is the
+// sequence that is known to boot on the modded console, so it is kept intact:
+//   1. CIC CONF (D8) driven HIGH  -> lockout enabled
+//   2. reset helper               -> D4 HIGH 500 ms, then released (high-Z)
+//   3. D13 output + status LED    -> red with the lockout enabled
+//   4. CIC data (D5) pull-up, controller pins as plain inputs
+//   5. 1700 ms settle (= v1.5.0), then the CIC handshake is sampled
 void setup() {
     if (debug) Serial.begin(9600);
-    pinMode(cicPin, OUTPUT);
-    digitalWrite(cicPin, HIGH);
+
+    // 1. Lockout chip enabled by default.
+    setCicEnabled(true);
+
+    // 2. Reset helper (identical to v1.5.0).
     triggerMediumReset();
 
-    pinMode(ledPin, OUTPUT);
+    // 3. Onboard LED and status LED.
+    pinMode(PIN_DEBUG_LED, OUTPUT);
+    blueOff();
     updateLED();
 
-    pinMode(CicGndPin, INPUT_PULLUP);
-    pinMode(clock, INPUT);
-    pinMode(latch, INPUT);
-    pinMode(Sdata, INPUT);
+    // 4. CIC pin 1 is only read once, through the internal pull-up (as in v1.5.0).
+    pinMode(PIN_CIC_DATA, INPUT_PULLUP);
 
-    delay(1500);
+#if HAS_CONTROLLER
+    // Plain inputs, like v1.5.0. The console drives latch/clock; a floating
+    // data line is handled by the bus timeouts in readControllerFrame().
+    pinMode(PIN_LATCH, INPUT);
+    pinMode(PIN_CLOCK, INPUT);
+    pinMode(PIN_DATA,  INPUT);
+#endif
+
+    // 5. Let the CIC handshake run and check whether the cartridge passed.
+    delay(CIC_CHECK_DELAY_MS);
 
     handleCICUnlockIfNeeded();
-    loadCombos();
+
+#if HAS_RGB_LED
+    // "Firmware reached the end of setup" cue: one short green pulse on D3.
+    // D3 is not used by v1.5.0, so this pin is a free diagnostic channel.
+    if (isCicOn()) greenPulse(80);
+#endif
+
+    if (loadCombos()) {
+#if HAS_RGB_LED
+        // Blank/old EEPROM: the defaults were just written.
+        blueBlink(2, 100);
+#endif
+    }
 }
 
 void loop() {
-    waitForlatchFalling();
-    loadInput();
+#if HAS_CONTROLLER
+    if (!readControllerFrame()) return;
 
-    if (!alreadyCheckedConfiguration) {
-        const int configurationCombo[] = {buttonStart};
-        if (isComboPressed(configurationCombo, 1)) {
-            if (debug) Serial.println("Configurating buttons");
-            status = 1;
-        }
-        alreadyCheckedConfiguration = true;
+    if (!bootGesturesDone) {
+        handleBootGestures();
+        return;
     }
 
-    switch (status) {
-        case 1:
-            blinkActiveLed();
-            if (isAnyComboPressed()) {
-                if (debug) Serial.println("Reset combo selected...");
-                int pressedCombo[12];
-                int size = getPressedCombo(pressedCombo, sizeof(pressedCombo) / sizeof(pressedCombo[0]));
-                if (debug) Serial.print("Pressed combo: ");
-                for (int i = 0; i < size; i++) {
-                    if (debug) Serial.print(pressedCombo[i]);
-                    if (i < size - 1 && debug) Serial.print(", ");
-                }
-                if (debug) Serial.println();
-                saveNewResetCombo(pressedCombo, size);
-                status = 2;
-                delay(1000);
-            }
-            delay(300);
-            return;
-        case 2:
-            blinkActiveLed();
-            if (isAnyComboPressed()) {
-                if (debug) Serial.println("Long reset combo selected...");
-                int pressedCombo[12];
-                int size = getPressedCombo(pressedCombo, sizeof(pressedCombo) / sizeof(pressedCombo[0]));
-                if (debug) Serial.print("Pressed combo: ");
-                for (int i = 0; i < size; i++) {
-                    if (debug) Serial.print(pressedCombo[i]);
-                    if (i < size - 1 && debug) Serial.print(", ");
-                }
-                if (debug) Serial.println();
-                saveNewLongResetCombo(pressedCombo, size);
-                status = 0;
-                delay(1000);
-            }
-            delay(300);
-            return;
+    if (mode != MODE_NORMAL) {
+        handleConfiguration();
+        return;
     }
 
-    if (!alreadyCheckedFactoryReset) {
-        const int factoryResetCombo[] = {buttonSelect};
-        if (isComboPressed(factoryResetCombo, 1)) {
-            if (debug) Serial.println("Factory reset (SELECT)...");
-            saveDefaultCombos();
-        }
-        alreadyCheckedFactoryReset = true;
-    }
-
-    if (isComboPressed(combos.resetCombo, sizeof(combos.resetCombo) / sizeof(int))) {
-        if (debug) Serial.println("Soft reset");
-        blinkActiveLed();
-        triggerReset();
-    } else if (isComboPressed(combos.longResetCombo, sizeof(combos.longResetCombo) / sizeof(int))) {
-        if (debug) Serial.println("Long soft reset");
-        blinkActiveLed();
-        triggerLongReset();
-    }
-
-    delay(300);
+    handleInGame();
+#endif
 }

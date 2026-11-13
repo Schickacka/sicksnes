@@ -1,41 +1,43 @@
 #include <Arduino.h>
 #include "cic.h"
-
-#define CicGndPin 5
-#define cicPin 8
-#define ledPin 13
-#define greenPin 6
-#define redPin 7
-#define greenGNDPin 9
-#define redGNDPin 10
+#include "pins.h"
+#include "reset.h"
+#include "led.h"
 
 extern bool debug;
 
-void disableGroundPin() {
-    pinMode(CicGndPin, INPUT);
-    digitalWrite(CicGndPin, LOW);
+// Mirrors what we are driving on the CIC pin 4. Never read the pin back:
+// it is an output and its level depends on the CIC's internal pull-down.
+static bool cicEnabled = true;
+
+void setCicEnabled(bool enabled) {
+    // Write the port before switching to output, so no glitch is generated.
+    digitalWrite(PIN_CIC_CONF, enabled ? CIC_CONF_ENABLED : CIC_CONF_DISABLED);
+    pinMode(PIN_CIC_CONF, OUTPUT);
+    cicEnabled = enabled;
 }
 
 bool isCicOn() {
-    return digitalRead(cicPin) == HIGH;
+    return cicEnabled;
 }
-
-void toggleCIC() {
-    digitalWrite(cicPin, !digitalRead(cicPin));
-}
-
-void updateLED();
-void triggerReset();
 
 void handleCICUnlockIfNeeded() {
-    bool isGameRunning = digitalRead(CicGndPin) == LOW;
-    disableGroundPin();
+    // D5 reads CIC pin 1 through the internal pull-up. If the cartridge
+    // passed the handshake the line settles at CIC_DATA_RUNNING_LEVEL.
+    bool running = (digitalRead(PIN_CIC_DATA) == CIC_DATA_RUNNING_LEVEL);
 
-    if (!isGameRunning) {
-        if (debug) Serial.println("Unlocking console");
-        digitalWrite(ledPin, HIGH);
-        toggleCIC();
-        triggerReset();
-        updateLED();
+    // We only listen to this line: release it (high-Z, no pull-up).
+    pinMode(PIN_CIC_DATA, INPUT);
+    digitalWrite(PIN_CIC_DATA, LOW);
+
+    if (running) {
+        if (debug) Serial.println(F("CIC handshake OK, keeping lockout on."));
+        return;
     }
+
+    if (debug) Serial.println(F("CIC handshake failed, disabling lockout."));
+    digitalWrite(PIN_DEBUG_LED, HIGH);
+    setCicEnabled(false);
+    triggerReset();
+    updateLED();
 }

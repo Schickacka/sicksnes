@@ -2,18 +2,19 @@
 #define CONTROLLER_H
 
 #include <Arduino.h>
+#include "buttons.h"
 
-extern int buttonsState[12];
+// 0 = pressed, 1 = released (the SNES data line is active LOW).
+extern int buttonsState[BTN_COUNT];
 
-void loadInput();
-bool isComboPressed(const int combo[], size_t size);
+// Reads one full frame from the controller bus.
+// Returns false on timeout; in that case every button is marked released.
+bool readControllerFrame();
 
-int latchState();
-int clockState();
-int dataRead();
-void waitForclockFalling();
-void waitForlatchFalling();
-int getPressedCombo(int* outCombo, int maxSize);
-bool isAnyComboPressed();
+bool isComboPressed(const uint8_t combo[], size_t size);
+bool isSameCombo(const uint8_t a[], const uint8_t b[], size_t size);
+
+int countPressed();
+int getPressedCombo(uint8_t* outCombo, int maxSize);
 
 #endif
