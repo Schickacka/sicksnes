@@ -45,7 +45,7 @@ License: **GPL-3.0**, inherited from upstream. See [LICENSE](LICENSE).
 8. [Installing without the controller wires](#-installing-without-the-controller-wires)
 9. [Flashing](#-flashing)
 10. [Building from source](#️-building-from-source)
-11. [Compatibility notes](#-compatibility-notes)
+11. [Compatibility](#-compatibility)
 12. [Technical notes](#-technical-notes)
 13. [Troubleshooting](#-troubleshooting)
 14. [Changelog](#-changelog)
